@@ -30,7 +30,7 @@ Cases 0–8 run the same moving-camera path except the pressure case, which repe
 5. ATLAS2: two-by-two-cell texture groups.
 6. ATLAS4: four-by-four-cell groups.
 7. ARAM: optional cold cache.
-8. FAULTS: delayed completion, short reads and actual staging corruption.
+8. FAULTS: delayed completion, short reads, actual staging corruption and withdrawal of staged texture requests.
 9. PRESSURE: rapid demand changes, failures and a tighter 48 KiB cache budget.
 10. OCC REF: fixed camera and leaf coarse geometry.
 11. OCC CULL: identical pose/geometry/materials with conservative occlusion.
@@ -56,3 +56,5 @@ Keep texture group size, compression policy, read batch size, LOD thresholds and
 The simplifier measures vertex displacement, not a certified Hausdorff or silhouette bound. It preserves exact clipped boundaries, UV/normal/material domains and disconnected pieces, but is not a mesh reconstruction system. It cannot infer whether a floating component was intended. Imported PBR textures, transparent materials, skinned animation, arbitrary collision surfaces, general occluder extraction and audio underrun instrumentation remain production work. An AI-produced representative asset is still required for judging appearance and realistic compression/LOD quality.
 
 The scene telemetry protocol is version 2 (`0x4843`). Its 32 fields include guest frame, case, native usage, 99th-percentile frame interval in milliseconds, logical reads, publications, cache/failure/culling counters, actor position, collision blocks and completion mask. Percentiles use millisecond bins; overflow uses the observed maximum as a conservative bound. The checker samples rendered frames and saves completed measurements in JSON.
+
+The first accepted Release run reached every case and preserved the checked scene pixels across occlusion. The dense fixture also exercised roughly 98,000 source vertices. These are functional acceptance results, not a 30 FPS claim: moving cases still exceed the frame-time target. The SDK serializes managed execution, so synchronous native reads on its background executor can also delay application progress. Lifetime-safe native I/O outside that execution gate and CPU submission costs remain performance gates.

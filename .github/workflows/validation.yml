@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: capz/DolphinDotNet
-          ref: 8dcc620d62c2ddf3ce8a231e6170d79ec3983214
+          ref: ec6a42e87b3491d02f727ca4d15a7a47b171b302
           path: vendor/sdk
       - uses: actions/setup-dotnet@v4
         with:
@@ -34,6 +34,11 @@ jobs:
           CONFIGURATION: ${{ matrix.configuration }}
           FIXTURE_RESOLUTION: '48'
         run: tools/build_validation.sh
+      - name: Verify native resource API ranges and checksums
+        run: |
+          make -C vendor/sdk/tests mesh_range_test native_buffer_crc_test
+          vendor/sdk/tests/mesh_range_test
+          vendor/sdk/tests/native_buffer_crc_test
       - name: Build Dolphin validation container
         run: docker build -t hypercube-dolphin -f tools/Dockerfile.dolphin .
       - name: Boot the DOL and run all eleven scene comparisons
