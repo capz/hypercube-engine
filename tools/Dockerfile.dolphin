@@ -1,0 +1,3 @@
+FROM debian:trixie-slim
+RUN apt-get update && apt-get install -y --no-install-recommends dolphin-emu xvfb xauth ffmpeg python3 libgl1-mesa-dri ca-certificates && rm -rf /var/lib/apt/lists/*
+ENV LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS=2 SDL_AUDIODRIVER=dummy

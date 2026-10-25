@@ -1,0 +1,11 @@
+<Project>
+  <Import Project="../../Directory.Build.props" />
+  <PropertyGroup><ImportDirectoryBuildProps>false</ImportDirectoryBuildProps></PropertyGroup>
+  <Import Project="$(DolphinDotNetRoot)/sdk/DolphinDotNet.Sdk/Sdk/Sdk.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <DefineConstants Condition="'$(HypercubeCI)' == 'true'">$(DefineConstants);HYPERCUBE_CI</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../src/Hypercube.GameCube/Hypercube.GameCube.csproj" /></ItemGroup>
+  <Import Project="$(DolphinDotNetRoot)/sdk/DolphinDotNet.Sdk/Sdk/Sdk.targets" />
+</Project>

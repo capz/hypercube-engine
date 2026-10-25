@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <DolphinDotNetRoot Condition="'$(DolphinDotNetRoot)' == '' And Exists('$(MSBuildThisFileDirectory)vendor/sdk/sdk/DolphinDotNet.Sdk/Sdk/Sdk.props')">$(MSBuildThisFileDirectory)vendor/sdk</DolphinDotNetRoot>
+    <DolphinDotNetRoot Condition="'$(DolphinDotNetRoot)' == ''">$(MSBuildThisFileDirectory)../DolphinDotNet</DolphinDotNetRoot>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,56 @@
+name: Packed scene in Dolphin
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: capz/DolphinDotNet
+          ref: 354a40c14db469a66b5983c6c0f1d8524ca79a6e
+          path: vendor/sdk
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and test packed assets, scheduler and GameCube executable
+        env:
+          CONFIGURATION: ${{ matrix.configuration }}
+          FIXTURE_RESOLUTION: '48'
+        run: tools/build_validation.sh
+      - name: Build Dolphin validation container
+        run: docker build -t hypercube-dolphin -f tools/Dockerfile.dolphin .
+      - name: Boot the DOL and run all eleven scene comparisons
+        run: >-
+          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
+          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
+          python3 tools/dolphin_validation.py out/native-${{ matrix.configuration }}/Game.dol
+          --disc out/assets/world.iso --logs out/dolphin-${{ matrix.configuration }} --seconds 240
+      - name: Upload executable, assets, measurements and rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hypercube-validation-${{ matrix.configuration }}
+          path: |
+            out/native-*/Game.dol
+            out/native-*/Game.elf
+            out/assets/
+            out/dolphin-*/*.json
+            out/dolphin-*/*.png
+            out/dolphin-*/*.log
+            out/dolphin-*/user/Logs/
+            out/dolphin-*/user/Dump/Audio/
+          retention-days: 14
