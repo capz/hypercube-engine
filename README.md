@@ -13,12 +13,12 @@ mkdir -p vendor
 git clone https://github.com/capz/DolphinDotNet vendor/sdk
 git -C vendor/sdk checkout "$(cat .sdk-revision)"
 # Managed build only; suitable for opening/building the solution in an IDE.
-dotnet build Hypercube.sln -p:DndBuildNative=false
+dotnet build Hypercube.sln
 # Generates assets, runs host checks, AOT-compiles and produces the actual DOL.
 tools/build_validation.sh
 ```
 
-The SDK and native toolchain are pinned. Outputs are `out/native-Release/Game.dol`, `out/assets/world.hcp`, `world.iso` and `report.json`. Set `CONFIGURATION=Debug` for a Debug executable. `DOLPHIN_DOTNET_ROOT` can point to an existing SDK checkout. Restricted environments may also set `LIBOGC2_SOURCE` and `CA_CERT_FILE`.
+The solution builds managed projects by default; the script produces the console executable. The SDK and native toolchain are pinned. Outputs are `out/native-Release/Game.dol`, `out/assets/world.hcp`, `world.iso` and `report.json`. Set `CONFIGURATION=Debug` for a Debug executable. `DOLPHIN_DOTNET_ROOT` can point to an existing SDK checkout. Restricted environments may also set `LIBOGC2_SOURCE` and `CA_CERT_FILE`.
 
 ## Run
 
@@ -34,7 +34,7 @@ docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)" \
   --disc out/assets/world.iso --logs out/dolphin-Release --seconds 240
 ```
 
-The suite cycles automatically through eleven cases. A advances, X changes the dynamic cache budget (192/384/768 KiB), Y pauses camera movement, START restarts the suite, R toggles results, B drains work and exits. The yellow actor moves only after destination collision is ready. Coarse visuals remain available while detail loads. The binary strip at the bottom supplies machine-readable measurements.
+The suite cycles automatically through eleven cases. A advances, X changes the dynamic cache budget (192/384/768 KiB; 24/48/96 KiB in the pressure case), Y pauses camera movement, START restarts the suite, R toggles results, B drains work and exits. The yellow actor moves only after destination collision is ready. Coarse visuals remain available while detail loads. The binary strip at the bottom supplies machine-readable measurements.
 
 ## Dense asset intake
 

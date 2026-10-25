@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Dolphin.Graphics;
+using Dolphin.Storage;
 
 namespace Hypercube.GameCube;
 
@@ -9,6 +10,9 @@ public sealed class PackedWorld : IDisposable
     private readonly FileStream bootstrap;
     // Reserve one reusable decode buffer before variable-size bootstrap allocations.
     public readonly byte[] Scratch = new byte[16384];
+    private readonly VertexPositionNormalColorTexture[] vertices=new VertexPositionNormalColorTexture[384];
+    private readonly ushort[] indices=new ushort[384];
+    public readonly AssetStream Assets;
     public AssetCatalog Catalog { get; }
     public readonly Mesh?[] Patches;
     public readonly int[] TriangleCounts,VertexCounts;
@@ -21,6 +25,7 @@ public sealed class PackedWorld : IDisposable
     public readonly float[] Occluder=new float[6];
     public PackedWorld(string path)
     {
+        Assets=new AssetStream(path);
         bootstrap=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
         var header=new byte[32];ReadExact(bootstrap,header,32);
         int count=Binary.I32(header,8);
@@ -80,13 +85,12 @@ public sealed class PackedWorld : IDisposable
         int done=0;
         while(done<count){int n=stream.Read(bytes,done,count-done);if(n==0)throw new EndOfStreamException();done+=n;}
     }
-    public static Mesh DecodeMesh(byte[] bytes,AssetRecord record,AssetRecord texture,int group)
+    public Mesh DecodeMesh(byte[] bytes,AssetRecord record,AssetRecord texture,int group)
     {
         if(bytes.Length<12||Binary.U32(bytes,0)!=0x534d4348)throw new IOException("Invalid mesh payload.");
         int nv=Binary.U16(bytes,4),ni=Binary.U16(bytes,6);
-        if(nv<3||nv>768||ni<3||ni>768||ni%3!=0||12+nv*32+ni*2!=record.Length)
+        if(nv<3||nv>384||ni<3||ni>384||ni%3!=0||12+nv*32+ni*2!=record.Length)
             throw new IOException("Invalid bounded mesh dimensions.");
-        var vertices=new VertexPositionNormalColorTexture[nv];var indices=new ushort[ni];
         int cx=record.Cell%6,cz=record.Cell/6;
         for(int i=0;i<nv;i++)
         {
@@ -101,11 +105,11 @@ public sealed class PackedWorld : IDisposable
         }
         for(int i=0;i<ni;i++)
         {int value=Binary.U16(bytes,12+nv*32+i*2);if(value>=nv)throw new IOException("Mesh index is out of bounds.");indices[i]=(ushort)value;}
-        return Mesh.Create(vertices,indices);
+        return Mesh.Create(vertices,nv,indices,ni);
     }
     public void Dispose()
     {
-        bootstrap.Dispose();
+        Assets.Dispose();bootstrap.Dispose();
         for(int i=0;i<Patches.Length;i++)Patches[i]?.Dispose();
         for(int i=0;i<CoarseTextures.Length;i++)CoarseTextures[i]?.Dispose();
     }

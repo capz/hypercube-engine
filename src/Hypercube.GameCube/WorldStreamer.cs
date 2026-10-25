@@ -14,6 +14,7 @@ public sealed class WorldStreamer : IDisposable
     public readonly AramCache Cold;
     public readonly CellReadiness Cells=new CellReadiness();
     private readonly AssetCatalog catalog;
+    private readonly PackedWorld world;
     private readonly AssetStream stream;
     private readonly NativeBuffer staging=NativeBuffer.Allocate(131072);
     private readonly Mesh?[] meshes=new Mesh?[64];
@@ -38,7 +39,7 @@ public sealed class WorldStreamer : IDisposable
     public int Active=>count;
     public WorldStreamer(PackedWorld world,string path,int budgetBytes=384*1024)
     {
-        scratch=world.Scratch;catalog=world.Catalog;stream=new AssetStream(path);
+        this.world=world;scratch=world.Scratch;catalog=world.Catalog;stream=world.Assets;
         Policy=new ResourceScheduler(catalog,64,budgetBytes);
         Cold=new AramCache(catalog.Count,256*1024);
         for(int i=0;i<64;i++)textureSlots[i]=-1;
@@ -172,7 +173,7 @@ public sealed class WorldStreamer : IDisposable
             {
                 int tile=(r.Cell/6/Group)*((6+Group-1)/Group)+(r.Cell%6/Group);
                 var texture=catalog.Get(catalog.Texture(Format,Group,r.Mip,tile));
-                meshes[slot]=PackedWorld.DecodeMesh(scratch,r,texture,Group);
+                meshes[slot]=world.DecodeMesh(scratch,r,texture,Group);
                 bytes=meshes[slot]!.NativeBytes;triangleCounts[slot]=Binary.U16(scratch,6)/3;MeshTriangles+=triangleCounts[slot];
             }
             else
@@ -259,6 +260,6 @@ public sealed class WorldStreamer : IDisposable
     {
         if(count!=0)throw new InvalidOperationException("Drain streaming work before disposal.");
         for(int i=0;i<64;i++){meshes[i]?.Dispose();collisionBuffers[i]?.Dispose();}
-        Textures.Dispose();Cold.Dispose();stream.Dispose();staging.Dispose();otherBytes=0;
+        Textures.Dispose();Cold.Dispose();staging.Dispose();otherBytes=0;
     }
 }

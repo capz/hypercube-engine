@@ -33,12 +33,10 @@ internal static class Program
         bool exiting=false;
         while(true)
         {
-#if !HYPERCUBE_CI
             Controller.Update();var pad=Controller.GetState(0);
             if(pad.B.WasPressed)exiting=true;
             if(exiting){if(scene.Stop())return 0;}
             else scene.Input(pad);
-#endif
             scene.Present();
             // Yield the serialized managed execution gate, independently of I/O completion.
             Task.Delay(1).GetAwaiter().GetResult();
@@ -73,7 +71,8 @@ internal sealed class ProbeScene : IDisposable
     private bool stopped,complete,summary,automatic=true;
     private float actorX=2,actorY,actorZ=4,focusX=2,focusZ=4;
     private int actorCell=6;
-    private int Budget=>budgetIndex==0?192*1024:budgetIndex==1?384*1024:768*1024;
+    private int Budget=>scenario==8?(budgetIndex==0?24:budgetIndex==1?48:96)*1024:
+        budgetIndex==0?192*1024:budgetIndex==1?384*1024:768*1024;
     internal ProbeScene(string path)
     {
         this.path=path;world=new PackedWorld(path);

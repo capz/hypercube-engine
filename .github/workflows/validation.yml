@@ -3,6 +3,9 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+concurrency:
+  group: validation-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -18,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: capz/DolphinDotNet
-          ref: 354a40c14db469a66b5983c6c0f1d8524ca79a6e
+          ref: 8dcc620d62c2ddf3ce8a231e6170d79ec3983214
           path: vendor/sdk
       - uses: actions/setup-dotnet@v4
         with:

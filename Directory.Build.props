@@ -1,5 +1,6 @@
 <Project>
   <PropertyGroup>
+    <DndBuildNative Condition="'$(DndBuildNative)' == ''">false</DndBuildNative>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

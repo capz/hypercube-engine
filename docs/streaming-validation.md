@@ -17,7 +17,7 @@ This implementation turns the next architecture questions into executable compar
 | Visibility | Conservative AABB frustum, quadtree fallback traversal, material sorting | Actual submitted geometry counters |
 | Occlusion | Verified opaque rectangular wall, conservative projected test | Fixed-pose reference/cull image comparison plus draw reduction |
 | ARAM | Optional 256 KiB bounded cold cache, aligned asynchronous native transfers | Direct-storage and ARAM cases, transfer and cache-hit counters |
-| Audio | Looping resident PCM voice while streaming | Voice activity checked every frame; DSP output requires capture validation |
+| Audio | Looping resident PCM voice while streaming | Voice activity checked every frame; captured DSP samples checked for sustained output |
 
 ## Reading the comparisons
 
@@ -31,11 +31,13 @@ Cases 0–8 run the same moving-camera path except the pressure case, which repe
 6. ATLAS4: four-by-four-cell groups.
 7. ARAM: optional cold cache.
 8. FAULTS: delayed completion, short reads and actual staging corruption.
-9. PRESSURE: rapid demand changes and failures.
+9. PRESSURE: rapid demand changes, failures and a tighter 48 KiB cache budget.
 10. OCC REF: fixed camera and leaf coarse geometry.
 11. OCC CULL: identical pose/geometry/materials with conservative occlusion.
 
 Read/publication counts describe logical operations. AssetStream internally reads in bounded chunks; these counters are not physical SD or optical-drive transactions. Double-buffered textures are charged at twice their payload size. SDK resource bytes include native staging, geometry, textures and the diagnostic canvas; they exclude allocator overhead, the managed heap, audio allocations and other runtime/driver allocations. They are not total MEM1 usage.
+
+One shared 8 KiB stream-read buffer and reusable 384-vertex/index decode arrays are reserved before coarse loading. Large per-asset managed arrays are avoided; native meshes copy only the used range. Small task/work objects remain managed.
 
 The fixture deliberately remains within the SDK's unchanged 256 KiB managed heap and the coarse hierarchy has a separate 1 MiB native geometry limit. The dynamic budget excludes permanent coarse resources and the 128 KiB native staging buffer. ARAM caching has its own bound and the audio reservation is separate.
 

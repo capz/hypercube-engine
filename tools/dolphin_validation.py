@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Boot Validation.dol with its data ISO and check rendered scene + guest telemetry."""
 import argparse
+import array
 import json
 import math
 import os
@@ -82,7 +83,7 @@ def validate(capture,root,smoke):
                 ffmpeg(['-f','rawvideo','-pix_fmt','rgb24','-s','640x480','-i','pipe:0','-frames:v','1','-y',str(root/'first.png')],root/'first-encode.log',input=rgb)
             states.append(s);case=s['scenario']
             if not 0<=case<11:raise AssertionError('Unknown scenario')
-            if s['dynamicKiB']>384 or s['residentKiB']>s['dynamicKiB']+1:raise AssertionError('Dynamic budget exceeded')
+            if s['dynamicKiB']>(48 if case==8 else 384) or s['residentKiB']>s['dynamicKiB']+1:raise AssertionError('Dynamic budget exceeded')
             current=s['nativeKiB']-s['dynamicKiB']
             if baseline is None:baseline=current
             if abs(current-baseline)>1:raise AssertionError('Resources leaked between cases')
@@ -121,10 +122,28 @@ def validate(capture,root,smoke):
     proof={'smoke':smoke,'sampledFrames':len(states),'completedCases':list(completed.values()),'maximumWorldPixels':pixels,'baselineResourceKiB':baseline,'last':states[-1]}
     (root/'results.json').write_text(json.dumps(proof,indent=2)+'\n');print(json.dumps(proof))
 
+def audio_proof(root,smoke):
+    proofs=[]
+    for path in sorted((root/'user'/'Dump'/'Audio').glob('*dspdump*.wav')):
+        with wave.open(str(path)) as wav:
+            if wav.getsampwidth()!=2:raise AssertionError('Unexpected DSP sample format')
+            frames=active=quiet=longest=0;started=False;window=max(1,wav.getframerate()//10)
+            while block:=wav.readframes(window):
+                samples=array.array('h');samples.frombytes(block)
+                peak=max(map(abs,samples),default=0);frames+=len(samples)//wav.getnchannels()
+                if peak>50:started=True;active+=1;quiet=0
+                elif started:quiet+=1;longest=max(longest,quiet)
+            if started:
+                proofs.append(dict(file=path.name,seconds=frames/wav.getframerate(),activeWindows=active,longestQuietMs=longest*100))
+    if not proofs or max(p['seconds'] for p in proofs)<(5 if smoke else 100):raise AssertionError('No sustained non-silent DSP output')
+    if max(p['longestQuietMs'] for p in proofs)>300:raise AssertionError('Audio output contains a long silence during streaming')
+    (root/'audio.json').write_text(json.dumps(proofs,indent=2)+'\n')
+    return proofs
+
 def run(args):
     root=args.logs.resolve();root.mkdir(parents=True,exist_ok=False)
     config=root/'user'/'Config';config.mkdir(parents=True)
-    (config/'Dolphin.ini').write_text(f'[Core]\nGFXBackend = OGL\nCPUCore = 1\nCPUThread = False\nDSPHLE = {args.dsp=="HLE"}\nDSPThread = False\nDefaultISO = {args.disc.resolve()}\n[DSP]\nBackend = No Audio Output\nDumpAudio = True\n[Movie]\nDumpFrames = True\nDumpFramesSilent = True\n')
+    (config/'Dolphin.ini').write_text(f'[Core]\nGFXBackend = OGL\nCPUCore = 1\nCPUThread = False\nDSPHLE = {args.dsp=="HLE"}\nDefaultISO = {args.disc.resolve()}\n[DSP]\nDSPThread = False\nBackend = No Audio Output\nDumpAudio = True\n[Movie]\nDumpFrames = True\nDumpFramesSilent = True\n')
     (config/'GFX.ini').write_text('[Settings]\nSafeTextureCacheColorSamples = 0\nDumpFormat = avi\nDumpCodec = ffv1\nDumpEncoder = ffv1\nDumpPixelFormat = bgr0\n')
     (config/'Logger.ini').write_text('[Options]\nWriteToFile = True\nWriteToConsole = True\nVerbosity = 3\n[Logs]\nBOOT = True\nCORE = True\nPOWERPC = True\nOSREPORT = True\nOSREPORT_HLE = True\n')
     env=dict(os.environ,SDL_AUDIODRIVER='dummy',LP_NUM_THREADS='2',LIBGL_ALWAYS_SOFTWARE='1')
@@ -150,6 +169,7 @@ def run(args):
     if len(captures)!=1:raise AssertionError(f'Expected one capture, got {captures}')
     ffmpeg(['-sseof','-1','-i',str(captures[0]),'-frames:v','1','-y',str(root/'tail.png')],root/'tail-encode.log')
     validate(captures[0],root,args.smoke)
+    audio_proof(root,args.smoke)
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('dol',type=Path);p.add_argument('--disc',required=True,type=Path)
