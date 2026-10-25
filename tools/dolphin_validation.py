@@ -127,12 +127,13 @@ def validate(capture,root,smoke):
         if completed[10]['occluded']<1 or completed[10]['draws']>=completed[9]['draws']:raise AssertionError('Occlusion did not reduce submitted geometry')
         # Fixed camera, actor, material and leaf LOD in both cases. Ignore HUD.
         a,b=images[9],images[10];different=total=0;max_delta=0
-        for y in range(132,448):
+        for y in range(132,444):
             for x in range(W):
                 at=(y*W+x)*3;delta=max(abs(a[at+i]-b[at+i]) for i in range(3))
                 total+=1;different+=delta>8;max_delta=max(max_delta,delta)
-        if different>total*.002:raise AssertionError(f'Occlusion changed visible pixels: {different}/{total}, max delta {max_delta}')
+        if different:raise AssertionError(f'Occlusion changed visible pixels: {different}/{total}, max delta {max_delta}')
     proof={'smoke':smoke,'sampledFrames':len(states),'completedCases':list(completed.values()),'maximumWorldPixels':pixels,'baselineResourceKiB':baseline,'last':states[-1]}
+    if not smoke:proof['occlusionComparison']=dict(referenceDraws=completed[9]['draws'],culledDraws=completed[10]['draws'],comparedPixels=total,changedPixels=different,maxChannelDifference=max_delta)
     return proof
 
 def audio_proof(root,smoke):

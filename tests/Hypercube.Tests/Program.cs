@@ -117,3 +117,11 @@ scheduler = new ResourceScheduler(catalog, 1, 32768); scheduler.BeginDemand();
 scheduler.Demand(texture, ResourcePriority.Visible); scheduler.BeginDemand();
 Check(scheduler.Demand(collision, ResourcePriority.Gameplay) >= 0, "Unissued obsolete request releases its slot");
 Check(scheduler.Find(texture) == -1, "Reclaimed lookup cannot alias new request");
+
+scheduler = new ResourceScheduler(catalog, 2, 32768); scheduler.BeginDemand();
+slot = scheduler.Demand(texture, ResourcePriority.Visible);
+scheduler.BeginBatch(0,8192,1,batch,out _,out _);
+scheduler.Complete(slot,scheduler.Generation(slot),true,0);
+Check(scheduler.Cancel(texture)&&scheduler.State(slot)==ResourceState.Retiring,"Staged request retains ownership until completion");
+Check(!scheduler.CanPublish(slot,2048),"Canceled staging cannot become a resident asset");
+scheduler.ReleaseRetired(slot);Check(scheduler.Find(texture)==-1,"Retired staging can release its slot");

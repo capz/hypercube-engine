@@ -28,7 +28,7 @@ public sealed class WorldStreamer : IDisposable
     private readonly bool[] observed=new bool[8];
     private readonly byte[] scratch,one=new byte[1];
     private Task<int>? reading;
-    private int count,batchOffset,batchLength,actualRead,verifyRecord,verifyAt,holdUntil,sequence,otherBytes;
+    private int count,batchOffset,batchLength,actualRead,verifyRecord,verifyAt,holdUntil,sequence,textureStages,otherBytes;
     private uint checksum;
     private bool stopping;
     public int Frame,CompletedFrame,Group=1,Format=14,ReadBatchBytes=32768,MaxBatchRecords=4;
@@ -161,6 +161,9 @@ public sealed class WorldStreamer : IDisposable
             if(pool<0){Policy.Defer(slot,Frame);Deferred++;return;}
             textureSlots[slot]=pool;owned[slot]=r.Length*2;
             uploads[i]=Textures.Get(pool).StageUploadAsync(staging,relative);
+            // Deterministic ownership-loss fault, including the first texture:
+            // its transfer must finish before the physical pair is reusable.
+            if(InjectFaults&&textureStages++%5==0)Policy.Cancel(r.Id);
         }
         else
         {

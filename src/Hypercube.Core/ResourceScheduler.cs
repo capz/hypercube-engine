@@ -61,6 +61,16 @@ public sealed class ResourceScheduler
         }
         Rejected++; return -1;
     }
+    // Cancel an issued request without releasing its transfer-owned storage.
+    // The adapter must observe completion before acknowledging retirement.
+    public bool Cancel(int id)
+    {
+        int slot=Find(id);
+        if(slot<0||states[slot]==ResourceState.Resident||states[slot]==ResourceState.Retiring)return false;
+        bool issued=states[slot]==ResourceState.Reading||states[slot]==ResourceState.Ready;
+        states[slot]=issued?ResourceState.Retiring:ResourceState.Missing;
+        references[slot]=0;generations[slot]=nextGeneration++;Cancelled++;return true;
+    }
     public void CancelUnneeded()
     {
         for (int i = 0; i < ids.Length; i++) if (references[i] == 0)
