@@ -37,7 +37,8 @@ internal static class Program
             if(pad.B.WasPressed)exiting=true;
             if(exiting){if(scene.Stop())return 0;}
             else scene.Input(pad);
-            scene.Present();
+            try{scene.Present();}
+            catch(Exception error){DebugOverlay.WriteLine("SCENE ERROR: "+error.Message);throw;}
             // Yield the serialized managed execution gate, independently of I/O completion.
             Task.Delay(1).GetAwaiter().GetResult();
         }
@@ -107,6 +108,7 @@ internal sealed class ProbeScene : IDisposable
         for(int i=0;i<24;i++)selectedLod[i]=0;
         caseFrames=0;complete=false;summary=false;reportSecond=-1;frameSamples=maxFrameUs=0;frameSum=0;
         for(int i=0;i<frameHistogram.Length;i++)frameHistogram[i]=0;
+        actorX=focusX=2;actorZ=focusZ=4.5f;actorY=0;actorCell=6;
         actorTransform.LocalRotation=new Quaternion(0,0,0,1);
     }
     internal void Input(ControllerState pad)
@@ -230,12 +232,16 @@ internal sealed class ProbeScene : IDisposable
         }
         if(scenario>=9){targetX=4;targetZ=4.5f;focusX=12;focusZ=4;}
         else{focusX=actorX;focusZ=actorZ;}
-        streamer.Frame=frame;VisibilityAndDemand(targetX,targetZ);
-        if(requested<0&&!stopped)streamer.Pump();
+        streamer.Frame=frame;
         int cell=(int)(targetZ/4)*6+(int)(targetX/4);
         if(streamer.Cells.CanEnter(cell))
         {actorX=targetX;actorZ=targetZ;actorCell=cell;actorY=streamer.Ground(cell,actorX,actorZ)+.35f;}
         if(scenario<9){focusX=actorX;focusZ=actorZ;actorTransform.Rotate(0,2,0);}
+        // Cull and demand using the same camera pose that will render this frame.
+        // Movement uses already-published collision; new collision publishes for
+        // the following frame, avoiding a culling mismatch on teleports.
+        VisibilityAndDemand(targetX,targetZ);
+        if(requested<0&&!stopped)streamer.Pump();
         actorTransform.LocalPosition=new Vector3(actorX,actorY,actorZ);
         if(device.NativeBytes!=baseline+streamer.PhysicalBytes||streamer.PhysicalBytes>Budget)
             throw new InvalidOperationException("Native resource accounting or dynamic budget failed.");
@@ -276,7 +282,10 @@ internal sealed class ProbeScene : IDisposable
         FillTelemetry();
         if(!complete&&elapsed>=10000&&caseFrames>=60)
         {
+            if(streamer.InjectFaults&&(streamer.ShortReads==0||streamer.Corruptions==0||streamer.Delays==0||streamer.ChecksumFailures==0))
+                throw new InvalidOperationException("Fault scenario did not exercise short reads, corrupt payload rejection and delayed completions.");
             complete=true;completedMask|=1<<scenario;resultFrame99[scenario]=Frame99();
+            if(scenario==10)summary=true;
             telemetry.Data[31]=completedMask;
             for(int i=0;i<32;i++)snapshots[scenario,i]=telemetry.Data[i];
         }
@@ -289,25 +298,24 @@ internal sealed class ProbeScene : IDisposable
 #else
         if(complete&&scenario<10&&automatic&&elapsed>=11500)requested=scenario+1;
 #endif
-        if(complete&&scenario==10)summary=true;
     }
     private int Frame99()
     {
         int target=(frameSamples*99+99)/100,total=0;
-        for(int i=0;i<frameHistogram.Length;i++){total+=frameHistogram[i];if(total>=target)return i+1;}
+        for(int i=0;i<frameHistogram.Length;i++){total+=frameHistogram[i];if(total>=target)return i==500?maxFrameUs/1000+1:i+1;}
         return 0;
     }
     private void FillTelemetry()
     {
         var t=telemetry.Data;
-        t[0]=0x4843;t[1]=1;t[2]=frame;t[3]=scenario;t[4]=caseFrames;t[5]=streamer.PhysicalBytes/1024;
-        t[6]=device.NativeBytes/1024;t[7]=streamer.Policy.ResidentBytes/1024;t[8]=streamer.Active;
+        t[0]=0x4843;t[1]=2;t[2]=frame;t[3]=scenario;t[4]=caseFrames;t[5]=streamer.PhysicalBytes/1024;
+        t[6]=device.NativeBytes/1024;t[7]=streamer.Policy.ResidentBytes/1024;t[8]=Frame99();
         t[9]=streamer.Publications;t[10]=streamer.ReadOperations;t[11]=streamer.StorageBytes/1024;
         t[12]=streamer.AramBytes/1024;t[13]=streamer.Cold.Hits;t[14]=streamer.Textures.Reuses;t[15]=streamer.Policy.Evicted;
         t[16]=streamer.Failures;t[17]=streamer.Policy.Cancelled+streamer.Policy.Stale;t[18]=streamer.MaxBatch;
         t[19]=streamer.MultiplePublications;t[20]=drawCount;t[21]=triangles;t[22]=fallbacks;
         t[23]=visibleCount;t[24]=(int)(actorX*256);t[25]=(int)(actorY*256);t[26]=(int)(actorZ*256);
-        t[27]=streamer.Cells.BlockedMoves;t[28]=voice.IsPlaying?1:0;t[29]=frustumCulled;t[30]=occluded;t[31]=completedMask;
+        t[27]=streamer.Cells.BlockedMoves;t[28]=voice.IsPlaying?1:0;t[29]=streamer.CancelledUploads;t[30]=occluded;t[31]=completedMask;
     }
     private void Report(int elapsed)
     {

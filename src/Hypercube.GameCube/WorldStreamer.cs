@@ -33,8 +33,8 @@ public sealed class WorldStreamer : IDisposable
     private bool stopping;
     public int Frame,CompletedFrame,Group=1,Format=14,ReadBatchBytes=32768,MaxBatchRecords=4;
     public bool UseAram,InjectFaults;
-    public int ReadOperations,StorageBytes,AramBytes,Failures,ShortReads,Corruptions,Delays,Batches,MaxBatch,
-        MultiplePublications,UploadedBytes,ChecksumUs,MaxUploadUs,MaxPumpUs,MeshTriangles,Deferred,Publications;
+    public int ReadOperations,StorageBytes,AramBytes,Failures,ChecksumFailures,ShortReads,Corruptions,Delays,Batches,MaxBatch,
+        MultiplePublications,CancelledUploads,UploadedBytes,ChecksumUs,MaxUploadUs,MaxPumpUs,MeshTriangles,Deferred,Publications;
     public int PhysicalBytes=>Textures.PhysicalBytes+otherBytes;
     public int Active=>count;
     public WorldStreamer(PackedWorld world,string path,int budgetBytes=384*1024)
@@ -217,7 +217,7 @@ public sealed class WorldStreamer : IDisposable
                 long at=Clock.Timestamp;checksum=staging.ComputeCrc32(r.Offset-batchOffset+verifyAt,bytes,checksum);
                 ChecksumUs+=(int)(Clock.Timestamp-at);verifyAt+=bytes;work-=bytes;
                 if(verifyAt<r.Length)break;
-                valid=checksum==r.Checksum;
+                valid=checksum==r.Checksum;if(!valid)ChecksumFailures++;
             }
             if(!valid)Failures++;
             if(Policy.Complete(slot,tags[i],valid,Frame)&&!stopping){StartRecord(i);created++;}
@@ -239,6 +239,11 @@ public sealed class WorldStreamer : IDisposable
                 }
                 else
                 {
+                    // Consume the completed staging state while the allocation
+                    // is unbound. The obsolete asset is never registered resident
+                    // or exposed to a material; the physical pair can be reused.
+                    if(!Textures.Get(textureSlots[slot]).TryPublish())throw new InvalidOperationException("Obsolete texture staging did not finish.");
+                    CancelledUploads++;
                     Textures.Unbind(textureSlots[slot]);textureSlots[slot]=-1;owned[slot]=0;
                     if(Policy.State(slot)==ResourceState.Retiring)Policy.ReleaseRetired(slot);
                 }

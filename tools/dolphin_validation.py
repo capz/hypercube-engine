@@ -14,7 +14,7 @@ import wave
 
 W,H=640,480
 SIZE=W*H*3
-FIELDS=('magic','version','frame','scenario','caseFrames','dynamicKiB','nativeKiB','residentKiB','active','publications','reads','storageKiB','aramKiB','aramHits','reuse','evictions','failures','cancelled','maxBatch','multiPublish','draws','triangles','fallbacks','visibleCells','actorX256','actorY256','actorZ256','blocked','audioActive','frustumCulled','occluded','completedMask')
+FIELDS=('magic','version','frame','scenario','caseFrames','dynamicKiB','nativeKiB','residentKiB','frame99ms','publications','reads','storageKiB','aramKiB','aramHits','reuse','evictions','failures','cancelled','maxBatch','multiPublish','draws','triangles','fallbacks','visibleCells','actorX256','actorY256','actorZ256','blocked','audioActive','recycledUploads','occluded','completedMask')
 
 def telemetry(rgb):
     values=[]
@@ -28,7 +28,7 @@ def telemetry(rgb):
             if sum(pixel)>384:value|=1<<bit
         values.append(value)
     state=dict(zip(FIELDS,values))
-    if values[:2]!=[0x4843,1]:raise ValueError('No guest telemetry')
+    if values[:2]!=[0x4843,2]:raise ValueError('No guest telemetry')
     return state
 
 def ffmpeg(args,log,**kwargs):
@@ -65,7 +65,7 @@ def ground_coverage(rgb,state):
 def validate(capture,root,smoke):
     # A streaming decoder bounds memory independently of suite duration.
     command=['ffmpeg','-threads','1','-v','error','-i',str(capture),'-vf','fps=2,scale=640:480:flags=neighbor','-f','rawvideo','-pix_fmt','rgb24','pipe:1']
-    states=[];completed={};images={};invalid=0;last_mask=0;baseline=None;pixels={}
+    states=[];completed={};images={};invalid=0;last_mask=0;baseline=None;pixels={};actor_pixels={};positions={}
     with (root/'decode.log').open('wb') as err:
         process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=err)
         while True:
@@ -77,6 +77,8 @@ def validate(capture,root,smoke):
                 invalid+=1
                 if states:
                     (root/'invalid.rgb').write_bytes(rgb)
+                    (root/'states.json').write_text(json.dumps(states,indent=2)+'\n')
+                    ffmpeg(['-f','rawvideo','-pix_fmt','rgb24','-s','640x480','-i','pipe:0','-frames:v','1','-y',str(root/'failure.png')],root/'failure-encode.log',input=rgb)
                     raise AssertionError('Guest stopped emitting telemetry after startup')
                 continue
             if not states:
@@ -90,9 +92,16 @@ def validate(capture,root,smoke):
             if s['audioActive']!=1:raise AssertionError('Audio voice stopped')
             if s['completedMask']|last_mask!=s['completedMask']:raise AssertionError('Completion mask regressed')
             last_mask=s['completedMask']
-            ground_coverage(rgb,s)
+            try:ground_coverage(rgb,s)
+            except AssertionError:
+                (root/'coverage.rgb').write_bytes(rgb)
+                (root/'states.json').write_text(json.dumps(states,indent=2)+'\n')
+                ffmpeg(['-f','rawvideo','-pix_fmt','rgb24','-s','640x480','-i','pipe:0','-frames:v','1','-y',str(root/'failure.png')],root/'failure-encode.log',input=rgb)
+                raise
             world,actor=scene_pixels(rgb)
             pixels[case]=max(pixels.get(case,0),world)
+            actor_pixels[case]=max(actor_pixels.get(case,0),actor)
+            positions.setdefault(case,set()).add((s['actorX256'],s['actorZ256']))
             if s['completedMask']&(1<<case):
                 completed[case]=s;images[case]=rgb
         if process.wait()!=0:raise AssertionError('Capture could not be decoded')
@@ -106,21 +115,25 @@ def validate(capture,root,smoke):
         if set(completed)!=set(range(11)) or last_mask!=2047:raise AssertionError(f'Missing completed scenarios: {sorted(completed)}; last {states[-1]}')
         for case,s in completed.items():
             if s['caseFrames']<60 or pixels.get(case,0)<500:raise AssertionError(f'Insufficient rendered scene in case {case}')
+        for case in range(9):
+            xs=[p[0] for p in positions[case]]
+            if actor_pixels.get(case,0)<2 or max(xs)-min(xs)<6*256:raise AssertionError(f'No visible moving actor in case {case}')
         if max(s['maxBatch'] for s in states)<2 or max(s['multiPublish'] for s in states)<1:raise AssertionError('No actual batched multi-resource publication')
         if max(s['reuse'] for s in states)<1:raise AssertionError('No texture allocation reuse')
+        if max(s['recycledUploads'] for s in states)<1:raise AssertionError('No obsolete completed staging was recycled')
         if max(s['aramHits'] for s in states if s['scenario']==6)<1:raise AssertionError('ARAM path was not exercised')
         if max(s['failures'] for s in states if s['scenario'] in (7,8))<1:raise AssertionError('Injected failures were not detected')
         if max(s['blocked'] for s in states)<1:raise AssertionError('Collision readiness gate was not exercised')
         if completed[10]['occluded']<1 or completed[10]['draws']>=completed[9]['draws']:raise AssertionError('Occlusion did not reduce submitted geometry')
         # Fixed camera, actor, material and leaf LOD in both cases. Ignore HUD.
         a,b=images[9],images[10];different=total=0;max_delta=0
-        for y in range(180,448):
+        for y in range(132,448):
             for x in range(W):
                 at=(y*W+x)*3;delta=max(abs(a[at+i]-b[at+i]) for i in range(3))
                 total+=1;different+=delta>8;max_delta=max(max_delta,delta)
         if different>total*.002:raise AssertionError(f'Occlusion changed visible pixels: {different}/{total}, max delta {max_delta}')
     proof={'smoke':smoke,'sampledFrames':len(states),'completedCases':list(completed.values()),'maximumWorldPixels':pixels,'baselineResourceKiB':baseline,'last':states[-1]}
-    (root/'results.json').write_text(json.dumps(proof,indent=2)+'\n');print(json.dumps(proof))
+    return proof
 
 def audio_proof(root,smoke):
     proofs=[]
@@ -168,8 +181,9 @@ def run(args):
     captures=list((root/'user'/'Dump'/'Frames').glob('*.avi'))
     if len(captures)!=1:raise AssertionError(f'Expected one capture, got {captures}')
     ffmpeg(['-sseof','-1','-i',str(captures[0]),'-frames:v','1','-y',str(root/'tail.png')],root/'tail-encode.log')
-    validate(captures[0],root,args.smoke)
-    audio_proof(root,args.smoke)
+    proof=validate(captures[0],root,args.smoke)
+    proof['audio']=audio_proof(root,args.smoke)
+    (root/'results.json').write_text(json.dumps(proof,indent=2)+'\n');print(json.dumps(proof))
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('dol',type=Path);p.add_argument('--disc',required=True,type=Path)
