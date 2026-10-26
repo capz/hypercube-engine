@@ -125,3 +125,50 @@ scheduler.Complete(slot,scheduler.Generation(slot),true,0);
 Check(scheduler.Cancel(texture)&&scheduler.State(slot)==ResourceState.Retiring,"Staged request retains ownership until completion");
 Check(!scheduler.CanPublish(slot,2048),"Canceled staging cannot become a resident asset");
 scheduler.ReleaseRetired(slot);Check(scheduler.Find(texture)==-1,"Retired staging can release its slot");
+
+// Histogram quantization is conservative, including frames beyond the last bin.
+var metrics = new FrameMetrics();
+Check(metrics.Percentile(99) == 0 && metrics.MeanUs == 0, "Empty timing window");
+for (int i = 0; i < 98; i++) metrics.Record(16000);
+metrics.Record(33000); metrics.Record(900000);
+Check(metrics.Percentile(50) == 17 && metrics.Percentile(95) == 17 && metrics.Percentile(99) == 34,
+    "Percentiles use nearest rank, not the maximum or average");
+Check(metrics.Percentile(100) == 901 && metrics.MaximumUs == 900000 && metrics.MeanUs == 25010,
+    "Overflow and mean retain slow frames");
+metrics.Reset(); Check(metrics.Samples == 0 && metrics.MaximumUs == 0 && metrics.Percentile(99) == 0,
+    "Timing windows do not leak between cases");
+Check(ScenePolicy.DemandFallback(false, true) && ScenePolicy.DemandFallback(true, false) &&
+      !ScenePolicy.DemandFallback(true, true), "Adaptive demand retains fallback while detail is unavailable");
+// Prioritizing fallback must never displace gameplay or publish stale work.
+scheduler = new ResourceScheduler(catalog, 8, 32768); scheduler.BeginDemand();
+int detailSlot = scheduler.Demand(texture, ResourcePriority.Visible);
+int coarseSlot = scheduler.Demand(texture + 1, ResourcePriority.Coarse);
+criticalSlot = scheduler.Demand(collision, ResourcePriority.Gameplay);
+scheduler.BeginBatch(0, 8192, 1, batch, out _, out _);
+Check(batch[0] == criticalSlot, "Coarse-first keeps collision first");
+scheduler.Complete(criticalSlot, scheduler.Generation(criticalSlot), true, 0); scheduler.Publish(criticalSlot, 44);
+scheduler.BeginBatch(0, 8192, 1, batch, out _, out _);
+Check(batch[0] == coarseSlot, "Fallback is read before fine detail");
+scheduler.BeginDemand(); scheduler.Demand(texture, ResourcePriority.Visible); scheduler.CancelUnneeded();
+Check(!scheduler.Complete(coarseSlot, scheduler.Generation(coarseSlot), true, 0), "Withdrawn fallback cannot publish");
+Check(scheduler.Find(texture) == detailSlot, "Fine request survives fallback cancellation");
+Console.WriteLine("Performance timing and adaptive/coarse-first demand: PASS");
+
+// Pixel-equivalence oracle independent of the run encoder, including clamped values.
+var words=new int[32];var bits=new bool[512];var encoded=new bool[512];
+for(int trial=0;trial<100;trial++)
+{
+    for(int i=0;i<32;i++)words[i]=trial==0?0:trial==1?65535:random.Next(-10000,80000);
+    for(int i=0;i<512;i++){int v=Math.Clamp(words[i/16],0,65535);bits[i]=(v&(1<<(i%16)))!=0;}
+    int rectangles=1;
+    for(int at=0;at<512;)
+    {
+        int n=TelemetryRuns.Length(words,at);bool lit=TelemetryRuns.Lit(words,at);
+        Check(n>0&&at%64+n<=64,"Telemetry run cannot cross a raster row");
+        for(int i=0;i<n;i++)encoded[at+i]=lit;
+        if(lit)rectangles++;at+=n;
+    }
+    Check(bits.SequenceEqual(encoded),"Compact telemetry preserves every bit/pixel");
+    Check(rectangles<=257,"Compact telemetry bounds native rectangle submissions");
+}
+Console.WriteLine("Compact telemetry pixel equivalence: PASS");

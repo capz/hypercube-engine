@@ -36,6 +36,22 @@ docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)" \
 
 The suite cycles automatically through eleven cases. A advances, X changes the dynamic cache budget (192/384/768 KiB; 24/48/96 KiB in the pressure case), Y pauses camera movement, START restarts the suite, R toggles results, B drains work and exits. The yellow actor moves only after destination collision is ready. Coarse visuals remain available while detail loads. The binary strip at the bottom supplies machine-readable measurements.
 
+## Performance experiments
+
+The original eleven cases remain the default. A separate executable compares adaptive fallback demand, coarse-first scheduling, bounded streaming work and compact telemetry rendering against repaired RGBA8 geometry:
+
+```sh
+PERFORMANCE_SUITE=1 tools/build_validation.sh
+# Mount the same data ISO, then boot out/native-performance-Release/Game.dol.
+# Or use the Dolphin container built above:
+docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)" \
+  --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin \
+  python3 tools/dolphin_validation.py out/native-performance-Release/Game.dol \
+  --suite performance --disc out/assets/world.iso --logs out/performance --seconds 240
+```
+
+The Python command requires Dolphin, Xvfb and FFmpeg; run it inside `hypercube-dolphin` as shown above. Hardware uses the same SD2SP2 asset path. The suite runs nine cases automatically and displays F50/F95/F99 frame times. START repeats the run, R toggles results. CI uploads both executables and `out/dolphin-performance-Release/results.json`. See [the experiment design and research](docs/performance-experiments.md) before choosing defaults. These are experiments; hardware results decide which settings to keep.
+
 ## Dense asset intake
 
 ```sh

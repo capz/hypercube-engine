@@ -11,7 +11,7 @@ permissions:
 jobs:
   validation:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -47,6 +47,19 @@ jobs:
           --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
           python3 tools/dolphin_validation.py out/native-${{ matrix.configuration }}/Game.dol
           --disc out/assets/world.iso --logs out/dolphin-${{ matrix.configuration }} --seconds 240
+      - name: Build performance comparison executable
+        if: matrix.configuration == 'Release'
+        env:
+          PERFORMANCE_SUITE: '1'
+        run: tools/build_validation.sh
+      - name: Run nine performance comparisons and progress checks
+        if: matrix.configuration == 'Release'
+        run: >-
+          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
+          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
+          python3 tools/dolphin_validation.py out/native-performance-Release/Game.dol
+          --suite performance --disc out/assets/world.iso
+          --logs out/dolphin-performance-Release --seconds 240
       - name: Upload executable, assets, measurements and rendered evidence
         if: always()
         uses: actions/upload-artifact@v4
