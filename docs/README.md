@@ -1,6 +1,6 @@
 # Hypercube Engine — Technical Design
 
-Status: **proposed**, awaiting GameCube measurements. Target: retail Nintendo GameCube, 24 MiB MEM1, 16 MiB ARAM; baseline 30 FPS. Inspired by Fox Engine's coherent material authoring, world streaming, and baked lighting, **not** its deferred rendering implementation.
+Status: rendering design **proposed**; the [streaming validation foundation](streaming-validation.md) is implemented for Dolphin and hardware evaluation. Production choices await representative-content GameCube measurements. Target: retail Nintendo GameCube, 24 MiB MEM1, 16 MiB ARAM; baseline 30 FPS. Inspired by Fox Engine's coherent material authoring, world streaming, and baked lighting, **not** its deferred rendering implementation.
 
 ## Architecture
 

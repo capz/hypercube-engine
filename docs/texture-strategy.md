@@ -27,3 +27,7 @@ The [DolphinDotNet TextureStrategy experiment](https://github.com/capz/DolphinDo
 Measure on a real GameCube: GPU/CPU milliseconds at the same visual detail, texture binds, opaque draws, resident bytes, storage/ARAM bytes per second, p95/p99 page promotion latency, visible fallback fraction and worst-case rapid camera reversals. Select a **hybrid** if large unique surfaces benefit from fine pages but architecture/terrain clusters are faster with atlases.
 
 Gate: no design lock until an interactive camera and actual asynchronous streaming demonstration have stable performance and correct fallbacks.
+
+## Packed scene continuation
+
+The [engine validation executable](streaming-validation.md) adds packed GX textures, dense mesh intake, shared scheduling, collision readiness, optional ARAM caching and conservative visibility comparisons. The original SDK texture stress and nine-case comparison remain available and unchanged.

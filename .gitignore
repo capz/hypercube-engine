@@ -1,0 +1,7 @@
+bin/
+obj/
+out/
+vendor/sdk/
+__pycache__/
+*.pyc
+*.user

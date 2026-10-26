@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Hypercube.Core/Hypercube.Core.csproj" />
+    <ProjectReference Include="$(DolphinDotNetRoot)/src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
+  </ItemGroup>
+</Project>
