@@ -1578,8 +1578,8 @@
   ],
   "build": {
     "sdkRuntimeCommit": "f5c5ffbd92965e3ef048908287a80d9faef4bb8b",
-    "sdkPin": "bd5abedb6dee895bebe7f5ee87b8481c11f017c5",
-    "sdkPinNote": "Only the Clang test-oracle formatting differs from the runtime commit.",
+    "sdkPin": "0416b5707bf405319dd5ec1acf01a07efe4b230b",
+    "sdkPinNote": "Subsequent changes update tests, texture-fixture policy and documentation; SDK production sources are unchanged from the measured runtime commit.",
     "dolSha256": "b51a8ccba2d26e1188f63a67cb5a67b00c89f3bdd3b79f078aff50a61fd56bac",
     "discSha256": "e882962d95064eabebe9d4c5d522c44036fe1a7c5deb1aba85c01bc453c65de4",
     "nativeSourceSha256": {

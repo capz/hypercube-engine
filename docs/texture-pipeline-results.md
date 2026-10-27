@@ -47,3 +47,13 @@ The raw blocked-attempt count rises from 81 to 160 in All32, while the frame cou
 The 16/32/64 KiB combined means differ by less than 0.1 ms, with no repeatable quantum winner established here. Keep 32 KiB rather than extrapolating a benefit from still larger reads. Polling every basic block is substantially worse than the bounded stride-64 path. Another worker was not justified.
 
 [Full JSON and build/source hashes](measurements/texture-sdk-final.json), [comparison CSV](measurements/texture-sdk-final.csv), [SDK counters](measurements/texture-sdk-counters.csv). Earlier results are retained separately.
+
+## Final texture-only regression and stop condition
+
+The final SDK/source/policy candidate passes all nine texture cases, the full pixel/coverage/ownership oracle and the return to stress mode. Means span 16.68–16.78 ms; P99 spans 16.7–17.2 ms. At 384 KiB, moving detail is 98.25% for pages, 99.39% for 2×2 and 99.29% for 4×4. The 2×2/384 KiB control was 33.36 ms / 34.3 ms / 95.1% on the unchanged integrated baseline, and 95.7% with the instrumented fixed-pool control; the final compared integrated control is explicitly labeled in the report.
+
+The SDK-only mode and the additional queue/source/indexed-policy changes are separate rows. Indexing removes repeated linear residency scans in the texture fixture and uses 3 KiB of managed payload plus array headers. It retains the original 256 KiB heap limit and 84 KiB staging pool. Exhaustive route/reversal tests compare priorities, eviction choices, identities, coverage and useful bytes against the scanned policy.
+
+Paired page/384 KiB runs measured 16.71 and 16.78 ms with four jobs. Five jobs measured 16.82 ms with slightly lower coverage; a 750 µs upload budget measured 16.82 ms and lower coverage. These changes have reached the tested refresh interval. Further tested queue/foreground/read-quantum changes offer no repeatable gain on this path; this is a measured local plateau, not a proof that future SDK work cannot help other workloads.
+
+[All texture comparisons](measurements/texture-pipeline.md), [CSV](measurements/texture-pipeline.csv), [JSON/DOL hashes](measurements/texture-pipeline.json). The downloadable profiling package includes standalone texture DOLs and the Hypercube DOL/data disc, evidence, logs and a file-hash manifest. Emulator results remain subject to hardware confirmation before retiring validation controls.
