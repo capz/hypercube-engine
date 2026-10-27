@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: capz/DolphinDotNet
-          ref: ec6a42e87b3491d02f727ca4d15a7a47b171b302
+          ref: 593ec9e54a6ec498d16319889ab05aadbc36f72b
           path: vendor/sdk
       - uses: actions/setup-dotnet@v4
         with:
@@ -65,14 +65,14 @@ jobs:
         env:
           PROFILING_SUITE: '1'
         run: tools/build_validation.sh
-      - name: Run profiling isolation and phase-accounting checks
+      - name: Run sixteen engine/SDK throughput comparisons
         if: matrix.configuration == 'Release'
         run: >-
           docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
           --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
           python3 tools/dolphin_validation.py out/native-profiling-Release/Game.dol
           --suite profiling --disc out/assets/world.iso
-          --logs out/dolphin-profiling-Release --seconds 300
+          --logs out/dolphin-profiling-Release --seconds 360
       - name: Upload executable, assets, measurements and rendered evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -9,7 +9,7 @@ from dolphin_validation import SIZE, telemetry
 
 class ProfilingProof(unittest.TestCase):
     def packets(self,case=0):
-        common=dict(zip(COMMON,[0x4843,5,300,case,200,384,100,4095,0,FLAGS[case],1000,1000,1,0,500,4]))
+        common=dict(zip(COMMON,[0x4843,6,300,case,200,384,100,65535,0,FLAGS[case],1000,1000,1,0,500,4]))
         # Mean 40 ms = nine exclusive phases; all units are 10 us.
         a=[34,51,51,4000,100,200,100,600,1600,300,100,700,300,84,1000,500]
         b=[1000]*9+[5000,10000,20,20,2000,2000,0]
@@ -18,7 +18,7 @@ class ProfilingProof(unittest.TestCase):
         if case in (1,2):
             common['selectedPermille']=0;b[12]=0;c[6]=0;c[9]=c[10]=0
         if case==3:b[13]=b[14]=0
-        if case in (9,10):b[15]=10;c[15]=100
+        if case in (9,10,15):b[15]=10;c[15]=100
         return [dict(common,page=p,**{f'word{i}':v for i,v in enumerate(values)}) for p,values in enumerate((a,b,c))]
 
     def result(self,case=0):
@@ -69,18 +69,18 @@ class ProfilingProof(unittest.TestCase):
             p=self.packets()[0];p[field]=value
             with self.assertRaises(AssertionError):check_packet(p)
 
-    def test_protocol_v5_raster_decode(self):
+    def test_protocol_v6_raster_decode(self):
         expected=self.packets()[1];rgb=bytearray(SIZE)
         for field,name in enumerate(FIELDS):
             for bit in range(16):
                 index=field*16+bit;at=((450+index//64*4)*640+index%64*10+5)*3
                 rgb[at:at+3]=bytes([240 if expected[name]&(1<<bit) else 16])*3
-        self.assertEqual(telemetry(rgb,fields=FIELDS,version=5),expected)
+        self.assertEqual(telemetry(rgb,fields=FIELDS,version=6),expected)
         with self.assertRaises(ValueError):telemetry(rgb)
 
     def test_optimization_rows_preserve_work_flags_and_report_tradeoffs(self):
         rows=[self.result(c) for c in range(len(NAMES))]
-        for c in range(6,12):self.assertFalse(rows[c]['isolation'])
+        for c in range(6,len(NAMES)):self.assertFalse(rows[c]['isolation'])
         rows[6]['phaseMeanUs']['prepare']-=1000
         rows[6]['selectedPermille']-=100
         comparison=comparison_rows(rows)[0]
@@ -91,3 +91,14 @@ class ProfilingProof(unittest.TestCase):
         for field in ('demandPlanHits','demandPlanBuilds'):
             r=self.result(9);r[field]=0
             with self.assertRaises(AssertionError):check_result(r)
+
+    def test_sdk_cases_are_independent_and_preserve_content(self):
+        self.assertEqual(FLAGS[11:16],(1024,256,512,1792,2032))
+        rows=[self.result(c) for c in range(len(NAMES))]
+        for case in range(11,16):
+            self.assertFalse(rows[case]['isolation'])
+            self.assertEqual(FLAGS[case]&15,0)
+        self.assertEqual([r['name'] for r in comparison_rows(rows)][-5:],list(NAMES[11:16]))
+        collector=Collector()
+        for page in self.packets(15):collector.observe(page)
+        self.assertEqual(collector.result(15)['completedMask'],65535)

@@ -11,14 +11,14 @@ internal sealed partial class ProbeScene
 #else
     private const bool ProfilingSuite=false;
 #endif
-    private const int ProfileCases=12;
-    private bool OptimizeIds=>ProfilingSuite&&(scenario==6||scenario==10);
-    private bool OptimizeTree=>ProfilingSuite&&(scenario==7||scenario==10);
-    private bool OptimizeReady=>ProfilingSuite&&(scenario==8||scenario==10);
-    private bool OptimizeDemand=>ProfilingSuite&&(scenario==9||scenario==10);
+    private const int ProfileCases=16;
+    private bool OptimizeIds=>ProfilingSuite&&(scenario==6||scenario==10||scenario==15);
+    private bool OptimizeTree=>ProfilingSuite&&(scenario==7||scenario==10||scenario==15);
+    private bool OptimizeReady=>ProfilingSuite&&(scenario==8||scenario==10||scenario==15);
+    private bool OptimizeDemand=>ProfilingSuite&&(scenario==9||scenario==10||scenario==15);
     private readonly int[] demandOrder=new int[24];
     private int visibleMask,detailMask,selectedReadyMask;
-    private readonly string[] profileNames={"BASE","COARSE ONLY","TEXTURE ONLY","NO WORLD DRAW","NO DELAY","BASE REPEAT","FAST ID","TREE MASKS","REUSE READY","DEMAND PLAN","PREP COMBINED","BASE FINAL"};
+    private readonly string[] profileNames={"BASE","COARSE ONLY","TEXTURE ONLY","NO WORLD DRAW","NO DELAY","BASE REPEAT","FAST ID","TREE MASKS","REUSE READY","DEMAND PLAN","PREP COMBINED","SDK WAITS","SDK NATIVE IO","SDK POLL64","SDK COMBINED","SDK AND PREP"};
     private readonly FrameProfile? profile=ProfilingSuite?new FrameProfile():null;
     private readonly int[,]? profileSaved=ProfilingSuite?new int[ProfileCases,96]:null;
     private readonly bool[]? profileStored=ProfilingSuite?new bool[ProfileCases]:null;
@@ -54,6 +54,9 @@ internal sealed partial class ProbeScene
     }
     private void ConfigureProfile()
     {
+        Dolphin.Storage.AssetStream.UseNativeReads=scenario==12||scenario==14||scenario==15;
+        Dolphin.Threading.Tasks.Scheduler.ProductiveWaits=scenario==11||scenario>=14;
+        Dolphin.Threading.Tasks.Scheduler.PollStride=scenario>=13?64:1;
         profile!.Reset();profileMeasured=profileFinishPending=false;profileStored![scenario]=false;
         streamer.Group=1;streamer.Format=6;streamer.ReadBatchBytes=32768;streamer.MaxBatchRecords=4;
         streamer.UseAram=streamer.InjectFaults=streamer.AdaptiveFallback=streamer.CoarseFirst=false;
@@ -75,7 +78,7 @@ internal sealed partial class ProbeScene
         // A budget change invalidates the entire comparison, not just one row.
         if(pad.X.WasPressed){budgetIndex=(budgetIndex+1)%3;RestartProfileRun();}
         if(pad.Start.WasPressed)RestartProfileRun();
-        if(pad.R.WasPressed){profileReportPage=(profileReportPage+1)%6;summary=true;}
+        if(pad.R.WasPressed){profileReportPage=(profileReportPage+1)%9;summary=true;}
     }
     private void RecordProfilePump(long start,long decodeBefore,long createBefore)
     {
@@ -93,7 +96,7 @@ internal sealed partial class ProbeScene
             if(OptimizeReady?(selectedReadyMask&(1<<c))!=0:ReadyLevel(c,selectedLod[c],false))profileSelected++;
         }
     }
-    private int ProfileFlags=>scenario==1?1:scenario==2?2:scenario==3?4:scenario==4?8:scenario==6?16:scenario==7?32:scenario==8?64:scenario==9?128:scenario==10?240:0;
+    private int ProfileFlags=>scenario==1?1:scenario==2?2:scenario==3?4:scenario==4?8:scenario==6?16:scenario==7?32:scenario==8?64:scenario==9?128:scenario==10?240:scenario==12?256:scenario==13?512:scenario==11?1024:scenario==14?1792:scenario==15?2032:0;
     private void FillProfileTelemetry(int elapsed)
     {
         // Time-based page rotation avoids aliasing with a 2 Hz capture sampler.
@@ -108,7 +111,7 @@ internal sealed partial class ProbeScene
     {
         var t=telemetry.Data;var p=profile!;
         for(int i=0;i<32;i++)t[i]=0;
-        t[0]=0x4843;t[1]=5;t[2]=frame;t[3]=scenario;t[4]=p.Frames.Samples;
+        t[0]=0x4843;t[1]=6;t[2]=frame;t[3]=scenario;t[4]=p.Frames.Samples;
         t[5]=streamer.Policy.BudgetBytes/1024;t[6]=streamer.PhysicalBytes/1024;t[7]=completedMask;t[8]=page;t[9]=ProfileFlags;
         t[10]=(int)(actorX*256);t[11]=(int)(actorZ*256);t[12]=voice.IsPlaying?1:0;t[13]=streamer.Failures;
         t[14]=p.SelectedPermille;t[15]=streamer.Cells.BlockedMoves;
@@ -157,6 +160,7 @@ internal sealed partial class ProbeScene
             "QUALITY: BUDGET / SELECTED% / STREAMED% / READ / BLOCK");
         for(int s=first;s<first+6;s++)
         {
+            if(s>=ProfileCases){DebugOverlay.WriteLine("");continue;}
             if(!profileStored![s]){DebugOverlay.WriteLine(profileNames[s]+" PENDING");continue;}
             var r=profileSaved!;
             if(view==0)

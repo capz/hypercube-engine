@@ -11,10 +11,10 @@ For automatic validation, run the existing Dolphin container command with:
 ```sh
 python3 tools/dolphin_validation.py out/native-profiling-Release/Game.dol \
   --suite profiling --disc out/assets/world.iso \
-  --logs out/dolphin-profiling-Release --seconds 300
+  --logs out/dolphin-profiling-Release --seconds 360
 ```
 
-All twelve cases use repaired RGBA8 geometry, 1-cell texture tiles, 32 KiB/4-record batching, compact telemetry, the same moving-camera path and selected cache budget. The first guest second is warmup, followed by approximately nine measured seconds. Completion requires ten guest seconds and at least sixty rendered frames. Each completed case holds its frozen measurements until fourteen seconds to allow all telemetry pages to be sampled. Native allocations/transfers drain at transitions and the existing leak, collision and audio assertions remain active.
+All sixteen cases use repaired RGBA8 geometry, 1-cell texture tiles, 32 KiB/4-record batching, compact telemetry, the same moving-camera path and selected cache budget. The first guest second is warmup, followed by approximately nine measured seconds. Completion requires ten guest seconds and at least sixty rendered frames. Each completed case holds its frozen measurements until fourteen seconds to allow all telemetry pages to be sampled. Native allocations/transfers drain at transitions and the existing leak, collision and audio assertions remain active.
 
 | Case | Deliberate difference | Interpretation |
 | --- | --- | --- |
@@ -29,7 +29,11 @@ All twelve cases use repaired RGBA8 geometry, 1-cell texture tiles, 32 KiB/4-rec
 | REUSE READY | Reuse post-Pump selected readiness in diagnostics | Same sample window and publication state |
 | DEMAND PLAN | Cache expanded stable-ID demand plans | Replay every ID/priority through the scheduler each frame |
 | PREP COMBINED | All four preparation changes | Measures interactions |
-| BASE FINAL | Original preparation path | End-of-run control |
+| SDK WAITS | Release managed gate during synchronous end-frame GPU/VSync waits | Legacy reads, stride 1 |
+| SDK NATIVE IO | One native read into an exclusively leased buffer | Wait overlap off, stride 1 |
+| SDK POLL64 | Check cooperative clock once per 64 AOT block polls | Legacy reads, wait overlap off |
+| SDK COMBINED | All three SDK options | Original engine preparation |
+| SDK AND PREP | Combined SDK and engine preparation options | Same content policy |
 
 The isolation cases change resource readiness and therefore do not submit equal geometry or perform equal storage work. They are causal probes, not production optimizations. NO DELAY must still demonstrate mesh publications, detail progress, collision-gated actor movement and audible output; skipping the explicit delay is not permission to starve the background executor.
 
@@ -55,9 +59,9 @@ Read latency is measured from issuing an AssetStream request until Pump observes
 
 The suite reports demanded cells, cells with the exact selected LOD ready, cells with any streamed LOD ready, visible cells, submitted world draws/triangles, blocked moves and transferred bytes. Selected readiness is weighted by demanded cell observations. A frame with one streamed cell no longer stands in for an entirely ready scene. Permanent coarse fallback does not count as streamed detail. The actor is excluded from world draw/triangle counters and remains visible in NO WORLD DRAW.
 
-R cycles six result screens (three views for cases 0–5, then the same three for cases 6–11): frame percentiles with budget/readiness, mean phase microseconds, and quality/read/block counters. X restarts **all** cases at the new budget and clears previous results; START also clears all rows and restores automatic movement. Pending rows say PENDING. This prevents the mixed old/new measurements encountered with individual reruns of the earlier comparison suite. Changing budgets during a run invalidates a captured CI comparison.
+R cycles nine result screens (three views each for cases 0–5, 6–11 and 12–15): frame percentiles with budget/readiness, mean phase microseconds, and quality/read/block counters. X restarts **all** cases at the new budget and clears previous results; START also clears all rows and restores automatic movement. Pending rows say PENDING. This prevents the mixed old/new measurements encountered with individual reruns of the earlier comparison suite. Changing budgets during a run invalidates a captured CI comparison.
 
-Protocol v5 retains the 32-word raster but rotates three pages every 250 ms. Completed pages are frozen after the last present **and** delay have been measured. A 2 Hz capture samples all three pages during the completion hold. Common fields include case, flags identifying the isolation, budget, sample count, completion mask, actor position, selected readiness, failures and audio state. Page 0 contains frame percentiles and mean phase times; page 1 phase maxima, read latency and mesh/draw counts; page 2 transfer and quality statistics. Definitions are in `tools/profiling_validation.py`. Times stored in 10 microsecond units saturate at 655350 microseconds; individual 16-bit counters also saturate. Do not use saturated records to diagnose larger hitches or very long runs.
+Protocol v6 retains the 32-word raster but rotates three pages every 250 ms. Completed pages are frozen after the last present **and** delay have been measured. A 2 Hz capture samples all three pages during the completion hold. Common fields include case, flags identifying the isolation, budget, sample count, completion mask, actor position, selected readiness, failures and audio state. Page 0 contains frame percentiles and mean phase times; page 1 phase maxima, read latency and mesh/draw counts; page 2 transfer and quality statistics. Definitions are in `tools/profiling_validation.py`. Times stored in 10 microsecond units saturate at 655350 microseconds; individual 16-bit counters also saturate. Do not use saturated records to diagnose larger hitches or very long runs.
 
 CI verifies complete three-page snapshots at one budget, closes phase accounting within quantization error, checks readiness relationships and isolation invariants, and retains scene/actor/motion/audio/memory checks. Ground coverage is deliberately waived only in NO WORLD DRAW; actor and streaming progress are still required there. Host tests reject overlapping intervals, impossible readiness, mixed budgets, stale snapshots, missing pages and wrong protocol versions. No absolute timing win is required on a shared emulator runner.
 
@@ -84,7 +88,7 @@ Demand plans cache the ordered list of stable IDs and priorities, including dupl
 
 Leaf indices/subtree masks cost 436 bytes of integer-array payload plus headers. Demand-plan storage is allocated only in cases that use it (256 IDs and 256 priorities, plus 24-cell keys and headers). The readiness experiment reuses the selected-level result from the same post-Pump resolution pass; it does not carry readiness across frames. Defaults outside the profiling experiments retain the original demand path.
 
-Host checks compare original/cached tree-region decisions, slow/fast scheduler state and generation behavior, key invalidation, overflow fallback, and replay after eviction. The complete twelve-case native suite retains phase-accounting, audio, motion, ground, budget, page and detail-progress assertions. Absolute speed is reported rather than asserted on the emulator.
+Host checks compare original/cached tree-region decisions, slow/fast scheduler state and generation behavior, key invalidation, overflow fallback, and replay after eviction. The native suite retains phase-accounting, audio, motion, ground, budget, page and detail-progress assertions. Absolute speed is reported rather than asserted on the emulator.
 
 ## Preparation optimization results
 
@@ -112,3 +116,11 @@ Compare optimization rows with BASE, BASE REPEAT and BASE FINAL, including detai
 A lower frame time with less detail or more blocked movement does not automatically establish a production improvement.
 
 All twelve cases passed native scene/progress/phase/budget assertions, including 98 cached demand-plan hits and 64 builds in DEMAND PLAN, and 107 hits/62 builds in PREP COMBINED. Captured audio contained 289 seconds of sustained output with no detected long quiet windows. Fast ID and combined timings are candidates for repeated hardware measurement; F99 stayed at 134 ms and combined selected readiness was lower. No default is promoted.
+
+## SDK comparison contract
+
+Protocol v6 has sixteen cases. BASE and BASE REPEAT use the new SDK with native reads disabled, polling stride 1 and productive waits disabled. The callback ring queue and compiler correctness fixes apply to every case; these rows do not recreate the old SDK binary exactly. Cases 11–15 vary the SDK options above. No async GPU submission is enabled: EndFrame still waits for GPU completion and VSync and existing fences retain their meaning.
+
+Native reads use a separate read-only handle and exclusive buffer lease. They remove the managed 8 KiB staging-copy/publication loop and release the managed execution gate during backend I/O; cancellation completes after the backend retires. Pending resources remain protected until that retirement. The existing 4 KiB aligned native bounce reader is retained. Poll-stride changes reduce clock checks; GC poll placement remains unchanged. Productive waits permit background service during presentation without application continuation reentry.
+
+Absolute timing wins are reported, not asserted. The validator checks full snapshots for all sixteen cases, unchanged low-bit content flags, phase closure, geometry/detail progress, actor motion, ground, audio and the 384 KiB budget. See [SDK implementation and remaining work](sdk-throughput-results.md) for measurements and follow-up priorities.

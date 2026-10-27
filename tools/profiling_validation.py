@@ -1,10 +1,10 @@
-"""Protocol v5: exclusive frame phases plus deliberate work-isolation controls."""
+"""Protocol v6: exclusive frame phases plus deliberate work-isolation controls."""
 import json
 import csv
 import subprocess
 
-NAMES=('BASE','COARSE ONLY','TEXTURE ONLY','NO WORLD DRAW','NO DELAY','BASE REPEAT','FAST ID','TREE MASKS','REUSE READY','DEMAND PLAN','PREP COMBINED','BASE FINAL')
-FLAGS=(0,1,2,4,8,0,16,32,64,128,240,0)
+NAMES=('BASE','COARSE ONLY','TEXTURE ONLY','NO WORLD DRAW','NO DELAY','BASE REPEAT','FAST ID','TREE MASKS','REUSE READY','DEMAND PLAN','PREP COMBINED','SDK WAITS','SDK NATIVE IO','SDK POLL64','SDK COMBINED','SDK AND PREP')
+FLAGS=(0,1,2,4,8,0,16,32,64,128,240,1024,256,512,1792,2032)
 PHASES=('streamOther','decode','meshCreate','draw','present','yield','hud','prepare','other')
 COMMON=('magic','version','frame','scenario','samples','budgetKiB','dynamicKiB','completedMask',
         'page','flags','actorX256','actorZ256','audioActive','failures','selectedPermille','blocked')
@@ -84,7 +84,7 @@ def check_result(r):
         raise AssertionError('Normal geometry streaming made insufficient progress')
     if case==3 and (r['drawsMean'] or r['trianglesMean']):
         raise AssertionError('No-world-draw case submitted world geometry')
-    if case in (9,10) and (r['demandPlanHits']==0 or r['demandPlanBuilds']==0):
+    if case in (9,10,15) and (r['demandPlanHits']==0 or r['demandPlanBuilds']==0):
         raise AssertionError('Demand plan caching was not exercised')
     if case==2 and r['publications']<5:
         raise AssertionError('Texture-only case did not publish assets')
@@ -93,7 +93,7 @@ def check_result(r):
 def comparison_rows(results):
     base=results[0]
     rows=[]
-    for case in range(6,11):
+    for case in range(6,len(NAMES)):
         r=results[case]
         rows.append(dict(name=r['name'],prepareChangeUs=r['phaseMeanUs']['prepare']-base['phaseMeanUs']['prepare'],
                          frameChangeUs=r['frameMeanUs']-base['frameMeanUs'],frame99ChangeMs=r['frame99ms']-base['frame99ms'],
@@ -108,15 +108,16 @@ def write_report(results,root):
     with (root/'comparison.csv').open('w',newline='') as f:
         writer=csv.DictWriter(f,fieldnames=fields);writer.writeheader()
         for r in results:writer.writerow(dict({k:r[k] for k in fields if k!='prepareUs'},prepareUs=r['phaseMeanUs']['prepare']))
-    lines=['# Preparation profiling results','',
+    lines=['# Engine and SDK throughput profiling results','',
            'Emulator wall times. Optimizations keep the same demand policy; availability can still differ with execution speed.',
            '', '| Case | Frame mean ms | Prepare ms | F99 ms | Selected ready | Blocked | Storage KiB | Plan hits |',
            '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
     for r in results:
         lines.append(f"| {r['name']} | {r['frameMeanUs']/1000:.2f} | {r['phaseMeanUs']['prepare']/1000:.2f} | {r['frame99ms']} | {r['selectedPermille']/10:.1f}% | {r['blocked']} | {r['storageKiB']} | {r['demandPlanHits']} |")
     lines+=['','Cases COARSE ONLY, TEXTURE ONLY, NO WORLD DRAW and NO DELAY deliberately remove work.',
-            'Compare optimization rows with BASE, BASE REPEAT and BASE FINAL, including detail readiness and blocked movement.',
-            'A lower frame time with less detail or more blocked movement does not automatically establish a production improvement.']
+            'Compare optimization rows with BASE and BASE REPEAT, including detail readiness and blocked movement.',
+            'A lower frame time with less detail or more blocked movement does not automatically establish a production improvement.',
+            'BASE uses this SDK with legacy reads, stride 1 and productive waits off; the ring queue and compiler fixes apply to every case.']
     (root/'comparison.md').write_text('\n'.join(lines)+'\n')
 
 
@@ -132,7 +133,7 @@ def validate(capture,root,smoke):
                 rgb=process.stdout.read(SIZE)
                 if not rgb:break
                 if len(rgb)!=SIZE:raise AssertionError('Truncated frame')
-                try:s=telemetry(rgb,fields=FIELDS,version=5)
+                try:s=telemetry(rgb,fields=FIELDS,version=6)
                 except ValueError:
                     if states:raise AssertionError('Lost profiling telemetry')
                     continue
