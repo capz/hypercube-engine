@@ -32,7 +32,10 @@ public sealed class WorldStreamer : IDisposable
     private uint checksum;
     private bool stopping;
     public int Frame,CompletedFrame,Group=1,Format=14,ReadBatchBytes=32768,MaxBatchRecords=4;
-    public bool UseAram,InjectFaults,AdaptiveFallback,CoarseFirst;
+    public bool UseAram,InjectFaults,AdaptiveFallback,CoarseFirst,TexturesOnly,ProfileReads;
+    private long readAt;
+    public long ReadLatencyUs;
+    public int ReadLatencyCalls,MaxReadLatencyUs;
     // Zero time budget retains legacy behavior. A single native call cannot be preempted.
     public int ChecksumBytesPerPump=8192,CreatesPerPump=4,PumpBudgetUs;
     public long PumpUs;
@@ -63,7 +66,7 @@ public sealed class WorldStreamer : IDisposable
         int cols=(6+Group-1)/Group;
         int tile=(cell/6/Group)*cols+(cell%6/Group);
         Demand(catalog.Texture(Format,Group,lod,tile),ResourcePriority.Visible);
-        for(int id=catalog.FirstMesh(cell,lod,raw);id!=0;id=catalog.Next(id))Demand(id,ResourcePriority.Visible);
+        for(int id=TexturesOnly?0:catalog.FirstMesh(cell,lod,raw);id!=0;id=catalog.Next(id))Demand(id,ResourcePriority.Visible);
         bool ready=false;
         if(AdaptiveFallback||CoarseFirst)
         {
@@ -75,7 +78,7 @@ public sealed class WorldStreamer : IDisposable
         {
             var priority=CoarseFirst&&!ready?ResourcePriority.Coarse:ResourcePriority.Prefetch;
             Demand(catalog.Texture(Format,Group,lod+1,tile),priority);
-            for(int id=catalog.FirstMesh(cell,lod+1);id!=0;id=catalog.Next(id))Demand(id,priority);
+            for(int id=TexturesOnly?0:catalog.FirstMesh(cell,lod+1);id!=0;id=catalog.Next(id))Demand(id,priority);
         }
     }
     public void DemandCollision(int cell)
@@ -144,6 +147,7 @@ public sealed class WorldStreamer : IDisposable
         {tags[i]=Policy.Generation(batch[i]);batchIds[i]=Policy.Id(batch[i]);uploads[i]=stores[i]=null;observed[i]=false;}
         bool cached=UseAram;
         for(int i=0;i<count;i++)if(!Cold.Has(batchIds[i]))cached=false;
+        if(ProfileReads)readAt=Clock.Timestamp;
         reading=cached?ReadCold():stream.ReadAtAsync(batchOffset,staging,0,batchLength);
         if(cached)AramBytes+=batchLength;else{StorageBytes+=batchLength;ReadOperations++;}
         sequence++;Batches++;if(count>MaxBatch)MaxBatch=count;
@@ -223,6 +227,11 @@ public sealed class WorldStreamer : IDisposable
             if(reading==null||!reading.IsCompleted||Frame<holdUntil)return;
             try{actualRead=reading.GetAwaiter().GetResult();}
             catch(IOException){actualRead=0;Failures++;}
+            if(ProfileReads)
+            {
+                int latency=(int)(Clock.Timestamp-readAt);ReadLatencyUs+=latency;ReadLatencyCalls++;
+                if(latency>MaxReadLatencyUs)MaxReadLatencyUs=latency;
+            }
             reading=null;
             if(InjectFaults&&sequence%7==3)
             {var r=catalog.Get(batchIds[count-1]);actualRead=r.Offset-batchOffset+r.Length-1;ShortReads++;}

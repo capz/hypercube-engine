@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using Dolphin.Graphics;
 using Dolphin.Storage;
+using Dolphin.Timing;
 
 namespace Hypercube.GameCube;
 
@@ -21,7 +22,10 @@ public sealed class PackedWorld : IDisposable
     public readonly float[] NodeMinY=new float[85],NodeMaxY=new float[85];
     public int ParentMeshCount, ParentTriangles;
     public float MinY=-1, MaxY=3;
-    public bool VerifiedOccluder;
+    public bool VerifiedOccluder,ProfileDecode;
+    public long DecodeUs,CreateUs;
+    public int DecodeCalls,MaxDecodeUs,MaxCreateUs;
+    public void ResetDecodeMetrics(){DecodeUs=CreateUs=0;DecodeCalls=MaxDecodeUs=MaxCreateUs=0;}
     public readonly float[] Occluder=new float[6];
     public PackedWorld(string path)
     {
@@ -91,6 +95,7 @@ public sealed class PackedWorld : IDisposable
         int nv=Binary.U16(bytes,4),ni=Binary.U16(bytes,6);
         if(nv<3||nv>384||ni<3||ni>384||ni%3!=0||12+nv*32+ni*2!=record.Length)
             throw new IOException("Invalid bounded mesh dimensions.");
+        long decodeAt=ProfileDecode?Clock.Timestamp:0;
         int cx=record.Cell%6,cz=record.Cell/6;
         for(int i=0;i<nv;i++)
         {
@@ -105,7 +110,15 @@ public sealed class PackedWorld : IDisposable
         }
         for(int i=0;i<ni;i++)
         {int value=Binary.U16(bytes,12+nv*32+i*2);if(value>=nv)throw new IOException("Mesh index is out of bounds.");indices[i]=(ushort)value;}
-        return Mesh.Create(vertices,nv,indices,ni);
+        long createAt=ProfileDecode?Clock.Timestamp:0;
+        var mesh=Mesh.Create(vertices,nv,indices,ni);
+        if(ProfileDecode)
+        {
+            int decode=(int)(createAt-decodeAt),create=(int)(Clock.Timestamp-createAt);
+            DecodeUs+=decode;CreateUs+=create;DecodeCalls++;
+            if(decode>MaxDecodeUs)MaxDecodeUs=decode;if(create>MaxCreateUs)MaxCreateUs=create;
+        }
+        return mesh;
     }
     public void Dispose()
     {

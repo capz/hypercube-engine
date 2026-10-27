@@ -172,3 +172,29 @@ for(int trial=0;trial<100;trial++)
     Check(rectangles<=257,"Compact telemetry bounds native rectangle submissions");
 }
 Console.WriteLine("Compact telemetry pixel equivalence: PASS");
+
+var phaseProfile=new FrameProfile();
+phaseProfile.Current[FrameProfile.Stream]=100;
+phaseProfile.Current[FrameProfile.Decode]=200;
+phaseProfile.Current[FrameProfile.Create]=300;
+phaseProfile.Current[FrameProfile.Draw]=400;
+phaseProfile.Current[FrameProfile.Present]=500;
+phaseProfile.Current[FrameProfile.Yield]=600;
+phaseProfile.Current[FrameProfile.Hud]=700;
+phaseProfile.Current[FrameProfile.Prepare]=800;
+phaseProfile.Record(4000,4,2,3,8,10,500);
+Check(phaseProfile.Mean(FrameProfile.Other)==400,"Exclusive phases leave the correct unattributed interval");
+phaseProfile.Record(5000,2,1,1,6,8,300);
+Check(phaseProfile.Frames.MeanUs==4500&&phaseProfile.Mean(FrameProfile.Other)==900&&
+      phaseProfile.Maximum(FrameProfile.Other)==1400,"Phase means/maxima retain frame alignment");
+Check(phaseProfile.SelectedPermille==500&&phaseProfile.Quality100(0)==300&&phaseProfile.DetailFrames==2,
+    "Detail readiness weights cells, not an average of frame percentages");
+int rejectedBefore=phaseProfile.Frames.Samples;
+try{phaseProfile.Record(3000,4,2,3,8,10,500);throw new Exception("Accepted overlapping phases");}
+catch(InvalidOperationException){}
+Check(phaseProfile.Frames.Samples==rejectedBefore,"Invalid profiling sample is atomic");
+try{phaseProfile.Record(5000,2,3,2,8,10,500);throw new Exception("Accepted impossible readiness");}
+catch(InvalidOperationException){}
+phaseProfile.Reset();Check(phaseProfile.Frames.Samples==0&&phaseProfile.SelectedPermille==0&&
+    phaseProfile.Current[FrameProfile.Draw]==0,"New profiling cases clear timings and quality");
+Console.WriteLine("Exclusive frame profiling and detail readiness: PASS");

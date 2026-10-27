@@ -33,6 +33,7 @@ internal static class Program
         bool exiting=false;
         while(true)
         {
+            scene.BeginProfileFrame();
             Controller.Update();var pad=Controller.GetState(0);
             if(pad.B.WasPressed)exiting=true;
             if(exiting){if(scene.Stop())return 0;}
@@ -40,23 +41,25 @@ internal static class Program
             try{scene.Present();}
             catch(Exception error){DebugOverlay.WriteLine("SCENE ERROR: "+error.Message);throw;}
             // Yield the serialized managed execution gate, independently of I/O completion.
-            Task.Delay(1).GetAwaiter().GetResult();
+            long yieldAt=scene.BeginProfileYield();
+            if(!scene.SkipProfileDelay)Task.Delay(1).GetAwaiter().GetResult();
+            scene.EndProfileFrame(yieldAt);
         }
     }
 }
 
-internal sealed class ProbeScene : IDisposable
+internal sealed partial class ProbeScene : IDisposable
 {
-#if HYPERCUBE_PERFORMANCE
+#if HYPERCUBE_PERFORMANCE || HYPERCUBE_PROFILING
     internal const bool PerformanceSuite=true;
 #else
     internal const bool PerformanceSuite=false;
 #endif
     private const int PerformanceCases=9;
-    private int CaseCount=>PerformanceSuite?PerformanceCases:11;
-    private int Kind=>PerformanceSuite?(scenario==7?7:scenario==8?8:1):scenario;
+    private int CaseCount=>ProfilingSuite?6:PerformanceSuite?PerformanceCases:11;
+    private int Kind=>ProfilingSuite?1:PerformanceSuite?(scenario==7?7:scenario==8?8:1):scenario;
     private readonly string[] performanceNames={"BASE","ON DEMAND","SLICED","COARSE FIRST","COMPACT HUD","COMBINED","BASE REPEAT","OPT FAULTS","OPT PRESSURE"};
-    private string CaseName=>PerformanceSuite?performanceNames[scenario]:names[scenario];
+    private string CaseName=>ProfilingSuite?profileNames[scenario]:PerformanceSuite?performanceNames[scenario]:names[scenario];
     private readonly FrameMetrics frameMetrics=new FrameMetrics();
     private readonly int[,] performanceResults=new int[9,32];
     private int detailFrames;
@@ -121,7 +124,7 @@ internal sealed class ProbeScene : IDisposable
         for(int i=0;i<24;i++)selectedLod[i]=0;
         caseFrames=0;complete=false;summary=false;reportSecond=-1;detailFrames=0;
         frameMetrics.Reset();
-        if(PerformanceSuite)
+        if(PerformanceSuite&&!ProfilingSuite)
         {
             // Each experiment starts from the same repaired RGBA8 layout/batch policy.
             streamer.Group=1;streamer.Format=6;streamer.ReadBatchBytes=32768;streamer.MaxBatchRecords=4;
@@ -132,12 +135,14 @@ internal sealed class ProbeScene : IDisposable
             if(scenario==2||scenario==5||scenario>=7)
             {streamer.ChecksumBytesPerPump=2048;streamer.CreatesPerPump=1;streamer.PumpBudgetUs=1000;}
         }
+        if(ProfilingSuite)ConfigureProfile();
         actorX=focusX=2;actorZ=focusZ=4.5f;actorY=0;actorCell=6;
         actorTransform.LocalRotation=new Quaternion(0,0,0,1);
     }
     internal void Input(ControllerState pad)
     {
         if(pad.A.WasPressed)requested=(scenario+1)%CaseCount;
+        if(ProfilingSuite){ProfileInput(pad);return;}
         if(pad.X.WasPressed){budgetIndex=(budgetIndex+1)%3;requested=scenario;}
         if(pad.Y.WasPressed)automatic=!automatic;
         if(pad.Start.WasPressed){completedMask=0;requested=0;}
@@ -192,7 +197,7 @@ internal sealed class ProbeScene : IDisposable
             selectedLod[cell]=ScenePolicy.Lod(distance,selectedLod[cell]);
             distances[cell]=distance;
         }
-        int selected=0;
+        int selected=0;profileDemanded=0;
         for(int pass=0;pass<24&&Kind<9;pass++)
         {
             int next=-1;
@@ -200,7 +205,8 @@ internal sealed class ProbeScene : IDisposable
                 (next<0||distances[c]<distances[next]))next=c;
             if(next<0||distances[next]>=12)break;
             selected|=1<<next;
-            if(!Occluded(world.Tree.Leaf(next)))streamer.DemandCell(next,Kind==0?0:selectedLod[next],Kind==0);
+            profileDemanded++;
+            if(!(ProfilingSuite&&scenario==1)&&!Occluded(world.Tree.Leaf(next)))streamer.DemandCell(next,Kind==0?0:selectedLod[next],Kind==0);
         }
     }
     private static float NativeDistance(float x,float z)
@@ -245,6 +251,8 @@ internal sealed class ProbeScene : IDisposable
         {
             frameMetrics.Record(frameUs);
         }
+        if(ProfilingSuite)profileMeasured=!complete&&requested<0&&!stopped&&elapsed>=1000;
+        long prepareAt=ProfilingSuite?Clock.Timestamp:0;
         float targetX=actorX,targetZ=actorZ;
         if(!complete&&automatic&&Kind<9)
         {
@@ -264,9 +272,13 @@ internal sealed class ProbeScene : IDisposable
         // Movement uses already-published collision; new collision publishes for
         // the following frame, avoiding a culling mismatch on teleports.
         VisibilityAndDemand(targetX,targetZ);
+        if(ProfilingSuite)profile!.Current[FrameProfile.Prepare]+=(int)(Clock.Timestamp-prepareAt);
+        long pumpAt=ProfilingSuite?Clock.Timestamp:0,decodeBefore=world.DecodeUs,createBefore=world.CreateUs;
         if(requested<0&&!stopped)streamer.Pump();
+        if(ProfilingSuite)RecordProfilePump(pumpAt,decodeBefore,createBefore);
+        prepareAt=ProfilingSuite?Clock.Timestamp:0;
         actorTransform.LocalPosition=new Vector3(actorX,actorY,actorZ);
-        if(device.NativeBytes!=baseline+streamer.PhysicalBytes||streamer.PhysicalBytes>Budget)
+        if(device.NativeBytes!=baseline+streamer.PhysicalBytes||streamer.PhysicalBytes>streamer.Policy.BudgetBytes)
             throw new InvalidOperationException("Native resource accounting or dynamic budget failed.");
         if(!voice.IsPlaying)throw new InvalidOperationException("Audio voice stopped during streaming.");
         for(int c=0;c<24;c++)
@@ -283,6 +295,12 @@ internal sealed class ProbeScene : IDisposable
             drawIds[j]=id;drawTextures[j]=texture;
         }
         camera.LookAt(new Vector3(focusX,12,focusZ+16),new Vector3(focusX,0,focusZ),new Vector3(0,1,0));
+        if(ProfilingSuite)
+        {
+            profile!.Current[FrameProfile.Prepare]+=(int)(Clock.Timestamp-prepareAt);
+            CountProfileDetail();
+        }
+        long drawAt=ProfilingSuite?Clock.Timestamp:0;
         device.BeginFrame(new Color32(8,10,19));renderer.Begin3D(camera);
         for(int i=0;i<drawCount;i++)
         {
@@ -292,36 +310,42 @@ internal sealed class ProbeScene : IDisposable
             if(material.Texture==null)throw new InvalidOperationException("Drawing an unpublished texture.");
             int tint=r.Kind==4?r.Variant:r.Material;
             material.Color=tint%3==0?Color32.White:tint%3==1?new Color32(230,255,255):new Color32(255,230,255);
-            renderer.DrawMesh(id<0?world.Patches[-id]!:streamer.Geometry(id)!,material,identity);
+            if(!(ProfilingSuite&&scenario==3))renderer.DrawMesh(id<0?world.Patches[-id]!:streamer.Geometry(id)!,material,identity);
             triangles+=id<0?world.TriangleCounts[-id]:streamer.Triangles(id);
             if(id>0){streamer.Pin(id);streamer.Pin(texture);}
             // Payload index count is stable; metrics use native geometry bytes
             // only for accounting, never as a triangle-count approximation.
         }
         renderer.DrawMesh(actor,actorMaterial,actorTransform);renderer.End3D();
+        if(ProfilingSuite)profile!.Current[FrameProfile.Draw]=(int)(Clock.Timestamp-drawAt);
+        long hudAt=ProfilingSuite?Clock.Timestamp:0;
         if(!complete&&elapsed>=1000&&fallbacks<drawCount)detailFrames++;
         var fence=device.InsertFence();
         if(fence.IsCompleted)throw new InvalidOperationException("A frame fence completed before submission finished.");
         if(elapsed/1000!=reportSecond){Report(elapsed);reportSecond=elapsed/1000;}
-        if(PerformanceSuite)FillPerformanceTelemetry();else FillTelemetry();
+        if(ProfilingSuite)FillProfileTelemetry(elapsed);else if(PerformanceSuite)FillPerformanceTelemetry();else FillTelemetry();
         if(!complete&&elapsed>=10000&&caseFrames>=60)
         {
             if(streamer.InjectFaults&&(streamer.ShortReads==0||streamer.Corruptions==0||streamer.Delays==0||streamer.ChecksumFailures==0))
                 throw new InvalidOperationException("Fault scenario did not exercise short reads, corrupt payload rejection and delayed completions.");
             complete=true;completedMask|=1<<scenario;resultFrame99[scenario]=Frame99();
             if(scenario==CaseCount-1)summary=true;
-            telemetry.Data[31]=completedMask;
+            if(ProfilingSuite)profileFinishPending=true;else telemetry.Data[31]=completedMask;
             for(int i=0;i<32;i++)
             {snapshots[scenario,i]=telemetry.Data[i];if(PerformanceSuite)performanceResults[scenario,i]=telemetry.Data[i];}
         }
-        telemetry.Draw();device.EndFrame();
+        telemetry.Draw();
+        if(ProfilingSuite)profile!.Current[FrameProfile.Hud]=(int)(Clock.Timestamp-hudAt);
+        long presentAt=ProfilingSuite?Clock.Timestamp:0;
+        device.EndFrame();
+        if(ProfilingSuite)profile!.Current[FrameProfile.Present]=(int)(Clock.Timestamp-presentAt);
         if(!fence.IsCompleted)throw new InvalidOperationException("A completed frame retained its fence.");
         streamer.CompletedFrame=frame;
         frame++;caseFrames++;
 #if HYPERCUBE_CI
-        if(complete&&scenario<CaseCount-1&&elapsed>=11500)requested=scenario+1;
+        if(complete&&scenario<CaseCount-1&&elapsed>=(ProfilingSuite?14000:11500))requested=scenario+1;
 #else
-        if(complete&&scenario<CaseCount-1&&automatic&&elapsed>=11500)requested=scenario+1;
+        if(complete&&scenario<CaseCount-1&&automatic&&elapsed>=(ProfilingSuite?14000:11500))requested=scenario+1;
 #endif
     }
     private int Frame99()=>frameMetrics.Percentile(99);
@@ -354,6 +378,7 @@ internal sealed class ProbeScene : IDisposable
     }
     private void Report(int elapsed)
     {
+        if(ProfilingSuite){ReportProfile();return;}
         if(PerformanceSuite&&summary)
         {
             DebugOverlay.WriteLine("PERFORMANCE RESULTS - F50/F95/F99 MS");
