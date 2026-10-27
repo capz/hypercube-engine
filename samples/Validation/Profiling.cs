@@ -25,6 +25,7 @@ internal sealed partial class ProbeScene
 #endif
     private const int ProfileCases=16;
     private const int ProfilePages=FollowupSuite?4:3;
+    private const int ProfilePageMilliseconds=750;
     private readonly string[] legacyFollowupNames={"PREVIOUS SDK","COMPLETE CHECK","DIRECT 16K","DIRECT 32K","DIRECT 64K","DEADLINE WAIT","CHECK DIRECT32","ALL 32K","ALL 16K","ALL 64K","ALL32 AND PREP","ALL32 NO DELAY","PREVIOUS REPEAT","ALL32 REPEAT","ALL32 POLL1","APP TIMERS ONLY"};
     private readonly int[] legacyFollowupFlags={1792,3840,9984,18176,34560,5888,20224,24336,16144,40720,24560,24344,1792,24336,23824,1808};
     private string[] followupNames=>
@@ -153,8 +154,9 @@ internal sealed partial class ProbeScene
     private int ProfileFlags=>FollowupSuite?followupFlags[scenario]:scenario==1?1:scenario==2?2:scenario==3?4:scenario==4?8:scenario==6?16:scenario==7?32:scenario==8?64:scenario==9?128:scenario==10?240:scenario==12?256:scenario==13?512:scenario==11?1024:scenario==14?1792:scenario==15?2032:0;
     private void FillProfileTelemetry(int elapsed)
     {
-        // Time-based page rotation avoids aliasing with a 2 Hz capture sampler.
-        int page=elapsed/(FollowupSuite?300:250)%ProfilePages;
+        // Hold each page longer than the 500 ms capture interval, including
+        // frame timing jitter. All four pages still fit in the 4 s result window.
+        int page=elapsed/ProfilePageMilliseconds%ProfilePages;
         if(complete&&profileStored![scenario])
         {for(int i=0;i<32;i++)telemetry.Data[i]=profileSaved![scenario,page*32+i];}
         else EncodeProfilePage(page);
@@ -249,3 +251,4 @@ internal sealed partial class ProbeScene
         DebugOverlay.WriteLine("PHASES ARE WALL TIME; PRESENT INCLUDES GPU/VSYNC");
     }
 }
+

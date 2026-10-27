@@ -1,5 +1,6 @@
 from pathlib import Path
 import copy
+import re
 import sys
 import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
@@ -162,12 +163,21 @@ class ProfilingProof(unittest.TestCase):
         self.assertEqual(telemetry(rgb,fields=FIELDS,version=7),expected)
         with self.assertRaises(ValueError):telemetry(rgb,fields=FIELDS,version=6)
 
-    def test_four_page_rotation_does_not_alias_with_two_hz_capture(self):
-        for offset in range(1200):
-            self.assertEqual({((offset+500*i)//300)%4 for i in range(8)},{0,1,2,3})
+    def test_page_rotation_does_not_alias_with_two_hz_capture_and_jitter(self):
+        source=(Path(__file__).resolve().parents[1]/'samples/Validation/Profiling.cs').read_text()
+        dwell=int(re.search(r'ProfilePageMilliseconds=(\d+);',source).group(1))
+        # A captured frame can predate the 2 Hz sample time. This pattern
+        # reproduces the missing v6 page with the previous 250 ms dwell.
+        for count in (3,4):
+            for offset in range(count*dwell):
+                for delays in ((0,)*8,(0,0,100,0,0,100,0,0)):
+                    pages={(offset+500*i-delays[i])//dwell%count for i in range(8)}
+                    with self.subTest(count=count,offset=offset,delays=delays):
+                        self.assertEqual(pages,set(range(count)))
 
     def test_no_delay_control_need_not_avoid_task_parks(self):
         collector=Collector(followup=True)
         pages=self.followup_packets(11);pages[3]['word4']=0
         for page in pages:collector.observe(page)
         self.assertEqual(collector.result(11)['sdk']['avoidedParks'],0)
+
