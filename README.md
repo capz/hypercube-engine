@@ -77,3 +77,5 @@ The default fixture is **synthetic adversarial input**, not output from an AI mo
 Read [the implementation and decision gates](docs/streaming-validation.md), [rendering design](docs/README.md) and [memory hypotheses](docs/memory-and-validation.md). Dolphin establishes correctness and comparative emulator measurements; hardware measurements decide SD/drive latency, DSP/ARAM contention, visual LOD quality and final defaults.
 
 The next SDK iteration has a separate [wait/read follow-up suite](docs/sdk-followup.md): `SDK_FOLLOWUP_SUITE=1 tools/build_validation.sh`, then `--suite sdk-followup` in the validator. It compares completion checks, deadline hints and aligned 16/32/64 KiB native reads with four-page protocol-v7 diagnostics.
+
+The next SDK iteration has a separate texture-throughput profile: `TEXTURE_FOLLOWUP_SUITE=1 tools/build_validation.sh`, then `--suite texture-followup` in the validator. [Texture pipeline results](docs/texture-pipeline-results.md) cover SDK 2D submission, frame-start clear reuse, task-completion/timer behavior and aligned reads with protocol-v8 diagnostics. Earlier v6/v7 result sets remain unchanged.

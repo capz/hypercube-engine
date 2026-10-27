@@ -3,7 +3,7 @@ import copy
 import sys
 import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from profiling_validation import FOLLOWUP_NAMES, FOLLOWUP_FLAGS, check_sdk_result, Collector, COMMON, FIELDS, FLAGS, NAMES, comparison_rows, check_packet, check_result
+from profiling_validation import TEXTURE_NAMES, TEXTURE_FLAGS, FOLLOWUP_NAMES, FOLLOWUP_FLAGS, check_sdk_result, Collector, COMMON, FIELDS, FLAGS, NAMES, comparison_rows, check_packet, check_result
 from dolphin_validation import SIZE, telemetry
 
 
@@ -113,6 +113,24 @@ class ProfilingProof(unittest.TestCase):
                   40,60,256,0 if quantum else 256,256 if quantum else 0,500,1000,quantum,(flags>>8)|((flags&16)<<4),80]
         pages.append(dict(pages[0],page=3,**{f'word{i}':value for i,value in enumerate(counters)}))
         return pages
+
+    def test_texture_followup_protocol8_checks_clear_and_read_modes(self):
+        for case,flags in enumerate(TEXTURE_FLAGS):
+            pages=self.followup_packets(case)
+            for page in pages:
+                page.update(version=8,flags=flags)
+            pages[3]['word4']=10 if flags&2048 else 0
+            pages[3]['word5']=1 if flags&4096 else 0
+            pages[3]['word14']=(flags>>8)|((flags&16)<<4)
+            collector=Collector(texture=True)
+            for page in pages:collector.observe(page)
+            self.assertEqual(TEXTURE_NAMES[case],collector.result(case)['name'])
+            with self.assertRaisesRegex(AssertionError,'Wrong profiling protocol'):
+                Collector(followup=True).observe(pages[0])
+        pages=self.followup_packets(1)
+        for page in pages:page.update(version=8,flags=TEXTURE_FLAGS[1])
+        pages[0]['flags'] &= ~32
+        with self.assertRaises(AssertionError):Collector(texture=True).observe(pages[0])
 
     def test_followup_requires_four_frozen_pages_and_real_backend_work(self):
         for case in range(len(FOLLOWUP_NAMES)):
