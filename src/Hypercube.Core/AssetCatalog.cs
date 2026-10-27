@@ -105,6 +105,10 @@ public sealed class AssetCatalog
             }
         }
     }
+    public void ValidateId(int id)
+    {
+        if(id<1||id>Count)throw new ArgumentOutOfRangeException("id");
+    }
     public AssetRecord Get(int id)
     {
         if (id < 1 || id > Count) throw new ArgumentOutOfRangeException("id");

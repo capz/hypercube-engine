@@ -56,7 +56,7 @@ internal sealed partial class ProbeScene : IDisposable
     internal const bool PerformanceSuite=false;
 #endif
     private const int PerformanceCases=9;
-    private int CaseCount=>ProfilingSuite?6:PerformanceSuite?PerformanceCases:11;
+    private int CaseCount=>ProfilingSuite?ProfileCases:PerformanceSuite?PerformanceCases:11;
     private int Kind=>ProfilingSuite?1:PerformanceSuite?(scenario==7?7:scenario==8?8:1):scenario;
     private readonly string[] performanceNames={"BASE","ON DEMAND","SLICED","COARSE FIRST","COMPACT HUD","COMBINED","BASE REPEAT","OPT FAULTS","OPT PRESSURE"};
     private string CaseName=>ProfilingSuite?profileNames[scenario]:PerformanceSuite?performanceNames[scenario]:names[scenario];
@@ -183,21 +183,21 @@ internal sealed partial class ProbeScene : IDisposable
     }
     private void VisibilityAndDemand(float targetX,float targetZ)
     {
-        visibleCount=frustumCulled=0;streamer.BeginDemand();
+        visibleCount=frustumCulled=0;visibleMask=0;streamer.BeginDemand();
         int targetCell=(int)(targetZ/4)*6+(int)(targetX/4);
         streamer.DemandCollision(actorCell);streamer.DemandCollision(targetCell);
         for(int cell=0;cell<24;cell++)
         {
-            int node=world.Tree.Leaf(cell);
-            bool onScreen=world.HasCell(cell)&&Visibility.Frustum(cell%6*4,world.NodeMinY[node],cell/6*4,
+            int node=OptimizeTree?world.Tree.Leaves[cell]:world.Tree.Leaf(cell);
+            bool onScreen=(OptimizeTree?world.Catalog.FirstPatch(node)!=0:world.HasCell(cell))&&Visibility.Frustum(cell%6*4,world.NodeMinY[node],cell/6*4,
                 cell%6*4+4,world.NodeMaxY[node],cell/6*4+4,focusX,focusZ);
-            visible[cell]=onScreen;if(!onScreen){frustumCulled++;continue;}visibleCount++;
+            visible[cell]=onScreen;if(!onScreen){frustumCulled++;continue;}visibleCount++;visibleMask|=1<<cell;
             float dx=cell%6*4+2-focusX,dz=cell/6*4+2-focusZ;
             float distance=NativeDistance(dx,dz);
             selectedLod[cell]=ScenePolicy.Lod(distance,selectedLod[cell]);
             distances[cell]=distance;
         }
-        int selected=0;profileDemanded=0;
+        int selected=0,planCells=0;profileDemanded=0;
         for(int pass=0;pass<24&&Kind<9;pass++)
         {
             int next=-1;
@@ -206,8 +206,13 @@ internal sealed partial class ProbeScene : IDisposable
             if(next<0||distances[next]>=12)break;
             selected|=1<<next;
             profileDemanded++;
-            if(!(ProfilingSuite&&scenario==1)&&!Occluded(world.Tree.Leaf(next)))streamer.DemandCell(next,Kind==0?0:selectedLod[next],Kind==0);
+            if(!(ProfilingSuite&&scenario==1)&&!Occluded(OptimizeTree?world.Tree.Leaves[next]:world.Tree.Leaf(next)))
+            {
+                if(OptimizeDemand)demandOrder[planCells++]=next;
+                else streamer.DemandCell(next,Kind==0?0:selectedLod[next],Kind==0);
+            }
         }
+        if(OptimizeDemand)streamer.DemandCells(demandOrder,planCells,selectedLod,Kind==0);
     }
     private static float NativeDistance(float x,float z)
     {
@@ -225,9 +230,14 @@ internal sealed partial class ProbeScene : IDisposable
         var tree=world.Tree;
         if(!tree.HasCells(node))return;
         bool anyVisible=false,anyDetail=false;
-        for(int z=tree.Z[node];z<tree.Z[node]+tree.Span[node]&&z<4;z++)
-            for(int x=tree.X[node];x<tree.X[node]+tree.Span[node]&&x<6;x++)
-            {int cell=z*6+x;if(visible[cell])anyVisible=true;if(resolved[cell]>=0)anyDetail=true;}
+        if(OptimizeTree)
+        {anyVisible=(tree.CellMasks[node]&visibleMask)!=0;anyDetail=(tree.CellMasks[node]&detailMask)!=0;}
+        else
+        {
+            for(int z=tree.Z[node];z<tree.Z[node]+tree.Span[node]&&z<4;z++)
+                for(int x=tree.X[node];x<tree.X[node]+tree.Span[node]&&x<6;x++)
+                {int cell=z*6+x;if(visible[cell])anyVisible=true;if(resolved[cell]>=0)anyDetail=true;}
+        }
         if(!anyVisible)return;
         if(Occluded(node)){occluded++;return;}
         if(!anyDetail&&(Kind<9||tree.Span[node]==1))
@@ -281,11 +291,17 @@ internal sealed partial class ProbeScene : IDisposable
         if(device.NativeBytes!=baseline+streamer.PhysicalBytes||streamer.PhysicalBytes>streamer.Policy.BudgetBytes)
             throw new InvalidOperationException("Native resource accounting or dynamic budget failed.");
         if(!voice.IsPlaying)throw new InvalidOperationException("Audio voice stopped during streaming.");
+        detailMask=selectedReadyMask=0;
         for(int c=0;c<24;c++)
         {
             resolved[c]=-1;
             if(visible[c]&&Kind<9)
-                for(int l=Kind==0?0:selectedLod[c];l<3;l++)if(ReadyLevel(c,l,Kind==0&&l==0)){resolved[c]=l;break;}
+                for(int l=Kind==0?0:selectedLod[c];l<3;l++)if(ReadyLevel(c,l,Kind==0&&l==0))
+                {
+                    resolved[c]=l;detailMask|=1<<c;
+                    if(l==selectedLod[c])selectedReadyMask|=1<<c;
+                    break;
+                }
         }
         drawCount=triangles=fallbacks=occluded=bindings=0;lastTexture=-1;Traverse(0);
         for(int i=1;i<drawCount;i++)
@@ -328,10 +344,11 @@ internal sealed partial class ProbeScene : IDisposable
         {
             if(streamer.InjectFaults&&(streamer.ShortReads==0||streamer.Corruptions==0||streamer.Delays==0||streamer.ChecksumFailures==0))
                 throw new InvalidOperationException("Fault scenario did not exercise short reads, corrupt payload rejection and delayed completions.");
-            complete=true;completedMask|=1<<scenario;resultFrame99[scenario]=Frame99();
+            complete=true;completedMask|=1<<scenario;
+            if(!ProfilingSuite)resultFrame99[scenario]=Frame99();
             if(scenario==CaseCount-1)summary=true;
             if(ProfilingSuite)profileFinishPending=true;else telemetry.Data[31]=completedMask;
-            for(int i=0;i<32;i++)
+            if(!ProfilingSuite)for(int i=0;i<32;i++)
             {snapshots[scenario,i]=telemetry.Data[i];if(PerformanceSuite)performanceResults[scenario,i]=telemetry.Data[i];}
         }
         telemetry.Draw();

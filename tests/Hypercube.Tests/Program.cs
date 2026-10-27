@@ -198,3 +198,76 @@ catch(InvalidOperationException){}
 phaseProfile.Reset();Check(phaseProfile.Frames.Samples==0&&phaseProfile.SelectedPermille==0&&
     phaseProfile.Current[FrameProfile.Draw]==0,"New profiling cases clear timings and quality");
 Console.WriteLine("Exclusive frame profiling and detail readiness: PASS");
+
+// Cached scene masks must exactly match the original ragged-region scans.
+for(int c=0;c<24;c++)Check(tree.Leaves[c]==tree.Leaf(c),"Cached leaf identity");
+for(int node=0;node<85;node++)
+{
+    int mask=0;
+    for(int z=tree.Z[node];z<tree.Z[node]+tree.Span[node]&&z<4;z++)
+        for(int x=tree.X[node];x<tree.X[node]+tree.Span[node]&&x<6;x++)mask|=1<<(z*6+x);
+    Check(mask==tree.CellMasks[node],"Subtree mask matches old clipped scan");
+    for(int trial=0;trial<100;trial++)
+    {
+        int visibleBits=random.Next(1<<24),detailBits=random.Next(1<<24)&visibleBits;
+        bool anyVisible=false,anyDetail=false;
+        for(int c=0;c<24;c++)if((mask&(1<<c))!=0)
+        {anyVisible|=(visibleBits&(1<<c))!=0;anyDetail|=(detailBits&(1<<c))!=0;}
+        Check(anyVisible==((tree.CellMasks[node]&visibleBits)!=0)&&anyDetail==((tree.CellMasks[node]&detailBits)!=0),
+            "Cached traversal preserves visible and detail decisions");
+    }
+}
+
+// Both demand validation paths preserve state, invalid-ID behavior and generations.
+var slowPolicy=new ResourceScheduler(catalog,8,32768);
+var fastPolicy=new ResourceScheduler(catalog,8,32768){ValidateIdsOnly=true};
+for(int f=0;f<80;f++)
+{
+    slowPolicy.BeginDemand();fastPolicy.BeginDemand();
+    for(int i=0;i<6;i++)
+    {
+        int id=i==0?collision:texture+(f/4+i)%4;
+        var priority=i==0?ResourcePriority.Gameplay:(i%2==0?ResourcePriority.Prefetch:ResourcePriority.Visible);
+        Check(slowPolicy.Demand(id,priority)==fastPolicy.Demand(id,priority),"Fast ID demand slot parity");
+    }
+    slowPolicy.CancelUnneeded();fastPolicy.CancelUnneeded();
+    int[] slowBatch=new int[8],fastBatch=new int[8];
+    int n=slowPolicy.BeginBatch(f,8192,4,slowBatch,out int so,out int sl);
+    int nf=fastPolicy.BeginBatch(f,8192,4,fastBatch,out int fo,out int fl);
+    Check(n==nf&&so==fo&&sl==fl,"Fast ID scheduling parity");
+    for(int i=0;i<n;i++)
+    {
+        int a=slowBatch[i],b=fastBatch[i];bool valid=f%3!=0;
+        Check(slowPolicy.Complete(a,slowPolicy.Generation(a),valid,f)==fastPolicy.Complete(b,fastPolicy.Generation(b),valid,f),"Fast ID completion parity");
+        if(valid){slowPolicy.Publish(a,44);fastPolicy.Publish(b,44);}
+    }
+    for(int i=0;i<8;i++)Check(slowPolicy.Id(i)==fastPolicy.Id(i)&&slowPolicy.State(i)==fastPolicy.State(i)&&
+        slowPolicy.Generation(i)==fastPolicy.Generation(i),"Fast ID full policy parity");
+}
+foreach(int id in new[]{-1,0,catalog.Count+1})
+{
+    foreach(var policy in new[]{slowPolicy,fastPolicy})
+    {try{policy.Demand(id,ResourcePriority.Visible);throw new Exception("Invalid demand ID accepted");}catch(ArgumentOutOfRangeException){}}
+}
+var plan=new DemandPlan(4);int[] order={1,2};int[] levels=new int[24];levels[1]=1;levels[2]=2;
+plan.Begin(order,2,levels,77,false);plan.Add(texture,ResourcePriority.Visible);plan.Add(texture,ResourcePriority.Prefetch);plan.Seal();
+Check(plan.Matches(order,2,levels,77,false)&&plan.Count==2&&plan.Ids[0]==plan.Ids[1]&&
+    plan.Priorities[0]!=plan.Priorities[1],"Demand plans preserve duplicate requests and priorities");
+levels[1]=0;Check(!plan.Matches(order,2,levels,77,false),"LOD change invalidates plan");levels[1]=1;
+Check(!plan.Matches(new[]{2,1},2,levels,77,false)&&!plan.Matches(order,1,levels,77,false)&&
+    !plan.Matches(order,2,levels,78,false)&&!plan.Matches(order,2,levels,77,true),"Plan key invalidation");
+plan.Begin(order,2,levels,77,false);for(int i=0;i<5;i++)plan.Add(texture+i%4,ResourcePriority.Visible);plan.Seal();
+Check(plan.Overflow&&!plan.Matches(order,2,levels,77,false),"Overflowed plan cannot replay truncated demand");
+Console.WriteLine("Prep optimization masks, scheduler parity and demand-plan invalidation: PASS");
+
+// Residency/generation changes do not stale a plan: only IDs are replayed through Demand.
+plan.Begin(order,1,levels,77,false);plan.Add(texture,ResourcePriority.Visible);plan.Seal();
+var replayPolicy=new ResourceScheduler(catalog,1,32768);
+int oldSlot=replayPolicy.Demand(texture,ResourcePriority.Visible);
+replayPolicy.BeginBatch(0,8192,1,batch,out _,out _);int oldTag=replayPolicy.Generation(oldSlot);
+replayPolicy.Complete(oldSlot,oldTag,true,0);replayPolicy.Publish(oldSlot,2048);
+replayPolicy.BeginDemand();replayPolicy.Evict(oldSlot,0);
+Check(plan.Matches(order,1,levels,77,false),"Stable ID plan survives residency changes");
+for(int i=0;i<plan.Count;i++)replayPolicy.Demand(plan.Ids[i],plan.Priorities[i]);
+Check(replayPolicy.State(replayPolicy.Find(texture))==ResourceState.Queued&&replayPolicy.Generation(oldSlot)!=oldTag,
+    "Plan replay restores live demand with a fresh generation");

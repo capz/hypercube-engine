@@ -1,9 +1,10 @@
-"""Protocol v4: exclusive frame phases plus deliberate work-isolation controls."""
+"""Protocol v5: exclusive frame phases plus deliberate work-isolation controls."""
 import json
+import csv
 import subprocess
 
-NAMES=('BASE','COARSE ONLY','TEXTURE ONLY','NO WORLD DRAW','NO DELAY','BASE REPEAT')
-FLAGS=(0,1,2,4,8,0)
+NAMES=('BASE','COARSE ONLY','TEXTURE ONLY','NO WORLD DRAW','NO DELAY','BASE REPEAT','FAST ID','TREE MASKS','REUSE READY','DEMAND PLAN','PREP COMBINED','BASE FINAL')
+FLAGS=(0,1,2,4,8,0,16,32,64,128,240,0)
 PHASES=('streamOther','decode','meshCreate','draw','present','yield','hud','prepare','other')
 COMMON=('magic','version','frame','scenario','samples','budgetKiB','dynamicKiB','completedMask',
         'page','flags','actorX256','actorZ256','audioActive','failures','selectedPermille','blocked')
@@ -44,18 +45,18 @@ class Collector:
         if set(pages)!={0,1,2}:raise AssertionError(f'Missing profiling pages for {NAMES[case]}')
         a,b,c=(pages[p] for p in range(3))
         result={k:a[k] for k in COMMON if k not in ('magic','version','page')}
-        result.update(name=NAMES[case],isolation=case not in (0,5),
+        result.update(name=NAMES[case],isolation=bool(FLAGS[case]&15),
                       frame50ms=a['word0'],frame95ms=a['word1'],frame99ms=a['word2'],
                       frameMeanUs=a['word3']*10,frameMaxMs=a['word13'],
                       decodeCallMaxUs=a['word14']*10,createCallMaxUs=a['word15']*10,
                       readLatencyMeanUs=b['word9']*10,readLatencyMaxUs=b['word10']*10,
-                      readObservations=b['word11'],decodeCalls=b['word12'],drawsMean=b['word13']/100,
+                      readObservations=b['word11'],decodeCalls=b['word12'],drawsMean=b['word13']/100,demandPlanBuilds=b['word15'],
                       trianglesMean=b['word14'],reads=c['word0'],storageKiB=c['word1'],
                       publications=c['word2'],evictions=c['word3'],deferred=c['word4'],cancelled=c['word5'],
                       detailFrames=c['word6'],checksumUs=c['word7']*10,
                       demandedMean=c['word8']/100,selectedMean=c['word9']/100,
                       streamedMean=c['word10']/100,visibleMean=c['word11']/100,
-                      pumpMaxUs=c['word12']*10,uploadedKiB=c['word13'],measuredMs=c['word14'],
+                      pumpMaxUs=c['word12']*10,uploadedKiB=c['word13'],measuredMs=c['word14'],demandPlanHits=c['word15'],
                       phaseMeanUs={p:a[f'word{4+i}']*10 for i,p in enumerate(PHASES)},
                       phaseMaxUs={p:b[f'word{i}']*10 for i,p in enumerate(PHASES)})
         check_result(result)
@@ -83,8 +84,40 @@ def check_result(r):
         raise AssertionError('Normal geometry streaming made insufficient progress')
     if case==3 and (r['drawsMean'] or r['trianglesMean']):
         raise AssertionError('No-world-draw case submitted world geometry')
+    if case in (9,10) and (r['demandPlanHits']==0 or r['demandPlanBuilds']==0):
+        raise AssertionError('Demand plan caching was not exercised')
     if case==2 and r['publications']<5:
         raise AssertionError('Texture-only case did not publish assets')
+
+
+def comparison_rows(results):
+    base=results[0]
+    rows=[]
+    for case in range(6,11):
+        r=results[case]
+        rows.append(dict(name=r['name'],prepareChangeUs=r['phaseMeanUs']['prepare']-base['phaseMeanUs']['prepare'],
+                         frameChangeUs=r['frameMeanUs']-base['frameMeanUs'],frame99ChangeMs=r['frame99ms']-base['frame99ms'],
+                         selectedChangePermille=r['selectedPermille']-base['selectedPermille'],
+                         blockedChange=r['blocked']-base['blocked'],storageChangeKiB=r['storageKiB']-base['storageKiB']))
+    return rows
+
+
+def write_report(results,root):
+    fields=('name','frameMeanUs','frame95ms','frame99ms','prepareUs','selectedPermille','streamedMean','blocked',
+            'reads','storageKiB','demandPlanBuilds','demandPlanHits')
+    with (root/'comparison.csv').open('w',newline='') as f:
+        writer=csv.DictWriter(f,fieldnames=fields);writer.writeheader()
+        for r in results:writer.writerow(dict({k:r[k] for k in fields if k!='prepareUs'},prepareUs=r['phaseMeanUs']['prepare']))
+    lines=['# Preparation profiling results','',
+           'Emulator wall times. Optimizations keep the same demand policy; availability can still differ with execution speed.',
+           '', '| Case | Frame mean ms | Prepare ms | F99 ms | Selected ready | Blocked | Storage KiB | Plan hits |',
+           '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
+    for r in results:
+        lines.append(f"| {r['name']} | {r['frameMeanUs']/1000:.2f} | {r['phaseMeanUs']['prepare']/1000:.2f} | {r['frame99ms']} | {r['selectedPermille']/10:.1f}% | {r['blocked']} | {r['storageKiB']} | {r['demandPlanHits']} |")
+    lines+=['','Cases COARSE ONLY, TEXTURE ONLY, NO WORLD DRAW and NO DELAY deliberately remove work.',
+            'Compare optimization rows with BASE, BASE REPEAT and BASE FINAL, including detail readiness and blocked movement.',
+            'A lower frame time with less detail or more blocked movement does not automatically establish a production improvement.']
+    (root/'comparison.md').write_text('\n'.join(lines)+'\n')
 
 
 def validate(capture,root,smoke):
@@ -99,7 +132,7 @@ def validate(capture,root,smoke):
                 rgb=process.stdout.read(SIZE)
                 if not rgb:break
                 if len(rgb)!=SIZE:raise AssertionError('Truncated frame')
-                try:s=telemetry(rgb,fields=FIELDS,version=4)
+                try:s=telemetry(rgb,fields=FIELDS,version=5)
                 except ValueError:
                     if states:raise AssertionError('Lost profiling telemetry')
                     continue
@@ -121,9 +154,9 @@ def validate(capture,root,smoke):
         if len(states)<3 or pixels.get(0,0)<500:raise AssertionError('Insufficient smoke scene')
         results=[]
     else:
-        if last_mask!=63:raise AssertionError('Missing completed profiling cases')
-        results=[collector.result(c) for c in range(6)]
-        for c in range(6):
+        if last_mask!=(1<<len(NAMES))-1:raise AssertionError('Missing completed profiling cases')
+        results=[collector.result(c) for c in range(len(NAMES))]
+        for c in range(len(NAMES)):
             if actors.get(c,0)<2 or (c!=3 and pixels.get(c,0)<500):raise AssertionError(f'Missing scene/actor in {NAMES[c]}')
             if max(positions.get(c,{0}))-min(positions.get(c,{0}))<6*256:
                 raise AssertionError(f'Actor did not progress in {NAMES[c]}')
@@ -133,5 +166,6 @@ def validate(capture,root,smoke):
     if images:
         # Save from decoded frames; unfinalized AVI indices can make end-seeks return the first frame.
         (root/'tail.png').write_bytes((root/f'case-{max(images):02}.png').read_bytes())
-    return dict(suite='profiling',smoke=smoke,sampledFrames=len(states),completedCases=results,last=states[-1],
+    if not smoke:write_report(results,root)
+    return dict(comparisons=comparison_rows(results) if not smoke else [],suite='profiling',smoke=smoke,sampledFrames=len(states),completedCases=results,last=states[-1],
                 note='Isolation cases intentionally remove work; phase intervals are wall time, not exclusive CPU or GPU time.')

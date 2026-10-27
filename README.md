@@ -59,9 +59,9 @@ PROFILING_SUITE=1 tools/build_validation.sh
 # Mount out/assets/world.iso, then boot out/native-profiling-Release/Game.dol.
 ```
 
-This separate six-case suite compares a baseline, collision/coarse-only streaming, textures without mesh decode, suppressed world draws, no explicit frame delay, and a repeated baseline. It records exclusive streaming, mesh decode, native mesh creation, drawing, present, explicit delay, HUD, preparation and residual wall time. Present includes GPU completion and VSync; read latency includes queueing and frame polling.
+This separate twelve-case suite compares baselines, work-isolation controls, and isolated preparation optimizations. It records exclusive streaming, mesh decode, native mesh creation, drawing, present, explicit delay, HUD, preparation and residual wall time. Present includes GPU completion and VSync; read latency includes queueing and frame polling.
 
-The result screen includes cache budget and selected-detail readiness. Press **R** to cycle timing/phase/quality pages. **X** changes the budget and restarts the entire suite, clearing all old rows; **START** also clears and restarts. The isolation cases deliberately remove work and are not equivalent-quality speedups. Run the same Docker command as above with `--suite profiling`, the profiling DOL, a fresh log directory and `--seconds 180`. CI runs and exports these comparisons too. See [profiling methodology](docs/frame-profiling.md).
+The result screens include cache budget and selected-detail readiness. Cases 6–10 measure fast ID validation, tree masks, readiness reuse, demand-plan caching and their combination; case 11 repeats the baseline. R cycles six screens covering both case groups. Press **R** to cycle timing/phase/quality pages. **X** changes the budget and restarts the entire suite, clearing all old rows; **START** also clears and restarts. The isolation cases deliberately remove work and are not equivalent-quality speedups. Run the same Docker command as above with `--suite profiling`, the profiling DOL, a fresh log directory and `--seconds 300`. CI runs and exports these comparisons too. See [profiling methodology](docs/frame-profiling.md).
 
 ## Dense asset intake
 

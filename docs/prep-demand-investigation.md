@@ -1,5 +1,7 @@
 # Reducing preparation and demand work
 
+Implementation update: the profiling suite now includes FAST ID, TREE MASKS, REUSE READY, DEMAND PLAN and PREP COMBINED. The original observations below explain the hypotheses; see the new package comparison.csv/comparison.md for the experiment results.
+
 ## Evidence from the profiling run
 
 The final six-case run (Release, Dolphin 2503/software Mesa, 384 KiB) completed all phase, page-consistency, rendering, motion, budget and audio checks. These are emulator wall times, not hardware CPU timings.
@@ -55,4 +57,4 @@ To distinguish these causes, measure visibility/LOD, demand issue, readiness res
 4. Evaluate demand-set caching with precise invalidation and equal detail progress.
 5. If preparation still includes large stalls, instrument/move native storage work in the SDK.
 
-Accept a change using preparation and total frame means/F95/F99 **together with** exact selected-LOD readiness, blocked moves, submitted geometry, storage bytes and repeated baselines. The tests already export those signals. This investigation identifies candidates; these optimizations have not been enabled or represented as measured wins.
+Accept a change using preparation and total frame means/F95/F99 **together with** exact selected-LOD readiness, blocked moves, submitted geometry, storage bytes and repeated baselines. The tests already export those signals. These candidates are now implemented as opt-in profiling cases 6–10; production defaults remain unchanged. The updated profiling package includes measured comparison tables and readiness/progress results.

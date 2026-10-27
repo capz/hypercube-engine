@@ -3,13 +3,13 @@ import copy
 import sys
 import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from profiling_validation import Collector, COMMON, FIELDS, FLAGS, check_packet, check_result
+from profiling_validation import Collector, COMMON, FIELDS, FLAGS, NAMES, comparison_rows, check_packet, check_result
 from dolphin_validation import SIZE, telemetry
 
 
 class ProfilingProof(unittest.TestCase):
     def packets(self,case=0):
-        common=dict(zip(COMMON,[0x4843,4,300,case,200,384,100,63,0,FLAGS[case],1000,1000,1,0,500,4]))
+        common=dict(zip(COMMON,[0x4843,5,300,case,200,384,100,4095,0,FLAGS[case],1000,1000,1,0,500,4]))
         # Mean 40 ms = nine exclusive phases; all units are 10 us.
         a=[34,51,51,4000,100,200,100,600,1600,300,100,700,300,84,1000,500]
         b=[1000]*9+[5000,10000,20,20,2000,2000,0]
@@ -18,6 +18,7 @@ class ProfilingProof(unittest.TestCase):
         if case in (1,2):
             common['selectedPermille']=0;b[12]=0;c[6]=0;c[9]=c[10]=0
         if case==3:b[13]=b[14]=0
+        if case in (9,10):b[15]=10;c[15]=100
         return [dict(common,page=p,**{f'word{i}':v for i,v in enumerate(values)}) for p,values in enumerate((a,b,c))]
 
     def result(self,case=0):
@@ -53,7 +54,7 @@ class ProfilingProof(unittest.TestCase):
             with self.assertRaises(AssertionError):check_result(r)
 
     def test_quality_and_isolation_invariants(self):
-        for case in range(6):check_result(self.result(case))
+        for case in range(len(NAMES)):check_result(self.result(case))
         invalid=[('selectedMean',5),('detailFrames',201),('readObservations',0)]
         for field,value in invalid:
             r=self.result();r[field]=value
@@ -68,11 +69,25 @@ class ProfilingProof(unittest.TestCase):
             p=self.packets()[0];p[field]=value
             with self.assertRaises(AssertionError):check_packet(p)
 
-    def test_protocol_v4_raster_decode(self):
+    def test_protocol_v5_raster_decode(self):
         expected=self.packets()[1];rgb=bytearray(SIZE)
         for field,name in enumerate(FIELDS):
             for bit in range(16):
                 index=field*16+bit;at=((450+index//64*4)*640+index%64*10+5)*3
                 rgb[at:at+3]=bytes([240 if expected[name]&(1<<bit) else 16])*3
-        self.assertEqual(telemetry(rgb,fields=FIELDS,version=4),expected)
+        self.assertEqual(telemetry(rgb,fields=FIELDS,version=5),expected)
         with self.assertRaises(ValueError):telemetry(rgb)
+
+    def test_optimization_rows_preserve_work_flags_and_report_tradeoffs(self):
+        rows=[self.result(c) for c in range(len(NAMES))]
+        for c in range(6,12):self.assertFalse(rows[c]['isolation'])
+        rows[6]['phaseMeanUs']['prepare']-=1000
+        rows[6]['selectedPermille']-=100
+        comparison=comparison_rows(rows)[0]
+        self.assertEqual(comparison['prepareChangeUs'],-1000)
+        self.assertEqual(comparison['selectedChangePermille'],-100)
+
+    def test_plan_optimization_must_actually_hit_and_build(self):
+        for field in ('demandPlanHits','demandPlanBuilds'):
+            r=self.result(9);r[field]=0
+            with self.assertRaises(AssertionError):check_result(r)

@@ -34,6 +34,9 @@ public sealed class WorldStreamer : IDisposable
     public int Frame,CompletedFrame,Group=1,Format=14,ReadBatchBytes=32768,MaxBatchRecords=4;
     public bool UseAram,InjectFaults,AdaptiveFallback,CoarseFirst,TexturesOnly,ProfileReads;
     private long readAt;
+    private DemandPlan? demandPlan;
+    private bool recordDemandPlan;
+    public int DemandPlanHits,DemandPlanBuilds,DemandPlanOverflows;
     public long ReadLatencyUs;
     public int ReadLatencyCalls,MaxReadLatencyUs;
     // Zero time budget retains legacy behavior. A single native call cannot be preempted.
@@ -55,6 +58,7 @@ public sealed class WorldStreamer : IDisposable
     public void BeginDemand()=>Policy.BeginDemand();
     private void Demand(int id,ResourcePriority priority)
     {
+        if(recordDemandPlan)demandPlan!.Add(id,priority);
         if(Policy.Demand(id,priority)>=0)return;
         // Slot capacity is independent of byte capacity. Reclaim an unneeded
         // resident even when the byte budget itself still has room.
@@ -80,6 +84,24 @@ public sealed class WorldStreamer : IDisposable
             Demand(catalog.Texture(Format,Group,lod+1,tile),priority);
             for(int id=TexturesOnly?0:catalog.FirstMesh(cell,lod+1);id!=0;id=catalog.Next(id))Demand(id,priority);
         }
+    }
+    public void DemandCells(int[] order,int count,int[] lods,bool raw=false)
+    {
+        // Adaptive/coarse-first policies depend on readiness; expand afresh in that mode.
+        if(AdaptiveFallback||CoarseFirst)
+        {for(int i=0;i<count;i++)DemandCell(order[i],lods[order[i]],raw);return;}
+        if(demandPlan==null)demandPlan=new DemandPlan();
+        int config=(Format<<8)|(Group<<1)|(TexturesOnly?1:0);
+        if(demandPlan.Matches(order,count,lods,config,raw))
+        {
+            DemandPlanHits++;
+            for(int i=0;i<demandPlan.Count;i++)Demand(demandPlan.Ids[i],demandPlan.Priorities[i]);
+            return;
+        }
+        DemandPlanBuilds++;demandPlan.Begin(order,count,lods,config,raw);recordDemandPlan=true;
+        try{for(int i=0;i<count;i++)DemandCell(order[i],lods[order[i]],raw);}
+        finally{recordDemandPlan=false;}
+        demandPlan.Seal();if(demandPlan.Overflow)DemandPlanOverflows++;
     }
     public void DemandCollision(int cell)
     {if(cell>=0&&cell<24)Demand(catalog.Collision(cell),ResourcePriority.Gameplay);}
