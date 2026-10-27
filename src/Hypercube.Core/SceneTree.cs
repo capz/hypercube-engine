@@ -3,8 +3,17 @@ namespace Hypercube;
 public sealed class SceneTree
 {
     public readonly int[] X = new int[85], Z = new int[85], Span = new int[85], Child = new int[85];
+    public readonly int[] Leaves=new int[24],CellMasks=new int[85];
     private int count;
-    public SceneTree(){Build(0,0,8);}
+    public SceneTree()
+    {
+        Build(0,0,8);
+        for(int cell=0;cell<24;cell++)Leaves[cell]=Leaf(cell);
+        for(int node=0;node<85;node++)
+            for(int cell=0;cell<24;cell++)
+                if(cell%6>=X[node]&&cell%6<X[node]+Span[node]&&cell/6>=Z[node]&&cell/6<Z[node]+Span[node])
+                    CellMasks[node]|=1<<cell;
+    }
     private int Build(int x,int z,int span)
     {
         int node=count++;X[node]=x;Z[node]=z;Span[node]=span;Child[node]=-1;

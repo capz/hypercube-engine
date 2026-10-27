@@ -125,3 +125,149 @@ scheduler.Complete(slot,scheduler.Generation(slot),true,0);
 Check(scheduler.Cancel(texture)&&scheduler.State(slot)==ResourceState.Retiring,"Staged request retains ownership until completion");
 Check(!scheduler.CanPublish(slot,2048),"Canceled staging cannot become a resident asset");
 scheduler.ReleaseRetired(slot);Check(scheduler.Find(texture)==-1,"Retired staging can release its slot");
+
+// Histogram quantization is conservative, including frames beyond the last bin.
+var metrics = new FrameMetrics();
+Check(metrics.Percentile(99) == 0 && metrics.MeanUs == 0, "Empty timing window");
+for (int i = 0; i < 98; i++) metrics.Record(16000);
+metrics.Record(33000); metrics.Record(900000);
+Check(metrics.Percentile(50) == 17 && metrics.Percentile(95) == 17 && metrics.Percentile(99) == 34,
+    "Percentiles use nearest rank, not the maximum or average");
+Check(metrics.Percentile(100) == 901 && metrics.MaximumUs == 900000 && metrics.MeanUs == 25010,
+    "Overflow and mean retain slow frames");
+metrics.Reset(); Check(metrics.Samples == 0 && metrics.MaximumUs == 0 && metrics.Percentile(99) == 0,
+    "Timing windows do not leak between cases");
+Check(ScenePolicy.DemandFallback(false, true) && ScenePolicy.DemandFallback(true, false) &&
+      !ScenePolicy.DemandFallback(true, true), "Adaptive demand retains fallback while detail is unavailable");
+// Prioritizing fallback must never displace gameplay or publish stale work.
+scheduler = new ResourceScheduler(catalog, 8, 32768); scheduler.BeginDemand();
+int detailSlot = scheduler.Demand(texture, ResourcePriority.Visible);
+int coarseSlot = scheduler.Demand(texture + 1, ResourcePriority.Coarse);
+criticalSlot = scheduler.Demand(collision, ResourcePriority.Gameplay);
+scheduler.BeginBatch(0, 8192, 1, batch, out _, out _);
+Check(batch[0] == criticalSlot, "Coarse-first keeps collision first");
+scheduler.Complete(criticalSlot, scheduler.Generation(criticalSlot), true, 0); scheduler.Publish(criticalSlot, 44);
+scheduler.BeginBatch(0, 8192, 1, batch, out _, out _);
+Check(batch[0] == coarseSlot, "Fallback is read before fine detail");
+scheduler.BeginDemand(); scheduler.Demand(texture, ResourcePriority.Visible); scheduler.CancelUnneeded();
+Check(!scheduler.Complete(coarseSlot, scheduler.Generation(coarseSlot), true, 0), "Withdrawn fallback cannot publish");
+Check(scheduler.Find(texture) == detailSlot, "Fine request survives fallback cancellation");
+Console.WriteLine("Performance timing and adaptive/coarse-first demand: PASS");
+
+// Pixel-equivalence oracle independent of the run encoder, including clamped values.
+var words=new int[32];var bits=new bool[512];var encoded=new bool[512];
+for(int trial=0;trial<100;trial++)
+{
+    for(int i=0;i<32;i++)words[i]=trial==0?0:trial==1?65535:random.Next(-10000,80000);
+    for(int i=0;i<512;i++){int v=Math.Clamp(words[i/16],0,65535);bits[i]=(v&(1<<(i%16)))!=0;}
+    int rectangles=1;
+    for(int at=0;at<512;)
+    {
+        int n=TelemetryRuns.Length(words,at);bool lit=TelemetryRuns.Lit(words,at);
+        Check(n>0&&at%64+n<=64,"Telemetry run cannot cross a raster row");
+        for(int i=0;i<n;i++)encoded[at+i]=lit;
+        if(lit)rectangles++;at+=n;
+    }
+    Check(bits.SequenceEqual(encoded),"Compact telemetry preserves every bit/pixel");
+    Check(rectangles<=257,"Compact telemetry bounds native rectangle submissions");
+}
+Console.WriteLine("Compact telemetry pixel equivalence: PASS");
+
+var phaseProfile=new FrameProfile();
+phaseProfile.Current[FrameProfile.Stream]=100;
+phaseProfile.Current[FrameProfile.Decode]=200;
+phaseProfile.Current[FrameProfile.Create]=300;
+phaseProfile.Current[FrameProfile.Draw]=400;
+phaseProfile.Current[FrameProfile.Present]=500;
+phaseProfile.Current[FrameProfile.Yield]=600;
+phaseProfile.Current[FrameProfile.Hud]=700;
+phaseProfile.Current[FrameProfile.Prepare]=800;
+phaseProfile.Record(4000,4,2,3,8,10,500);
+Check(phaseProfile.Mean(FrameProfile.Other)==400,"Exclusive phases leave the correct unattributed interval");
+phaseProfile.Record(5000,2,1,1,6,8,300);
+Check(phaseProfile.Frames.MeanUs==4500&&phaseProfile.Mean(FrameProfile.Other)==900&&
+      phaseProfile.Maximum(FrameProfile.Other)==1400,"Phase means/maxima retain frame alignment");
+Check(phaseProfile.SelectedPermille==500&&phaseProfile.Quality100(0)==300&&phaseProfile.DetailFrames==2,
+    "Detail readiness weights cells, not an average of frame percentages");
+int rejectedBefore=phaseProfile.Frames.Samples;
+try{phaseProfile.Record(3000,4,2,3,8,10,500);throw new Exception("Accepted overlapping phases");}
+catch(InvalidOperationException){}
+Check(phaseProfile.Frames.Samples==rejectedBefore,"Invalid profiling sample is atomic");
+try{phaseProfile.Record(5000,2,3,2,8,10,500);throw new Exception("Accepted impossible readiness");}
+catch(InvalidOperationException){}
+phaseProfile.Reset();Check(phaseProfile.Frames.Samples==0&&phaseProfile.SelectedPermille==0&&
+    phaseProfile.Current[FrameProfile.Draw]==0,"New profiling cases clear timings and quality");
+Console.WriteLine("Exclusive frame profiling and detail readiness: PASS");
+
+// Cached scene masks must exactly match the original ragged-region scans.
+for(int c=0;c<24;c++)Check(tree.Leaves[c]==tree.Leaf(c),"Cached leaf identity");
+for(int node=0;node<85;node++)
+{
+    int mask=0;
+    for(int z=tree.Z[node];z<tree.Z[node]+tree.Span[node]&&z<4;z++)
+        for(int x=tree.X[node];x<tree.X[node]+tree.Span[node]&&x<6;x++)mask|=1<<(z*6+x);
+    Check(mask==tree.CellMasks[node],"Subtree mask matches old clipped scan");
+    for(int trial=0;trial<100;trial++)
+    {
+        int visibleBits=random.Next(1<<24),detailBits=random.Next(1<<24)&visibleBits;
+        bool anyVisible=false,anyDetail=false;
+        for(int c=0;c<24;c++)if((mask&(1<<c))!=0)
+        {anyVisible|=(visibleBits&(1<<c))!=0;anyDetail|=(detailBits&(1<<c))!=0;}
+        Check(anyVisible==((tree.CellMasks[node]&visibleBits)!=0)&&anyDetail==((tree.CellMasks[node]&detailBits)!=0),
+            "Cached traversal preserves visible and detail decisions");
+    }
+}
+
+// Both demand validation paths preserve state, invalid-ID behavior and generations.
+var slowPolicy=new ResourceScheduler(catalog,8,32768);
+var fastPolicy=new ResourceScheduler(catalog,8,32768){ValidateIdsOnly=true};
+for(int f=0;f<80;f++)
+{
+    slowPolicy.BeginDemand();fastPolicy.BeginDemand();
+    for(int i=0;i<6;i++)
+    {
+        int id=i==0?collision:texture+(f/4+i)%4;
+        var priority=i==0?ResourcePriority.Gameplay:(i%2==0?ResourcePriority.Prefetch:ResourcePriority.Visible);
+        Check(slowPolicy.Demand(id,priority)==fastPolicy.Demand(id,priority),"Fast ID demand slot parity");
+    }
+    slowPolicy.CancelUnneeded();fastPolicy.CancelUnneeded();
+    int[] slowBatch=new int[8],fastBatch=new int[8];
+    int n=slowPolicy.BeginBatch(f,8192,4,slowBatch,out int so,out int sl);
+    int nf=fastPolicy.BeginBatch(f,8192,4,fastBatch,out int fo,out int fl);
+    Check(n==nf&&so==fo&&sl==fl,"Fast ID scheduling parity");
+    for(int i=0;i<n;i++)
+    {
+        int a=slowBatch[i],b=fastBatch[i];bool valid=f%3!=0;
+        Check(slowPolicy.Complete(a,slowPolicy.Generation(a),valid,f)==fastPolicy.Complete(b,fastPolicy.Generation(b),valid,f),"Fast ID completion parity");
+        if(valid){slowPolicy.Publish(a,44);fastPolicy.Publish(b,44);}
+    }
+    for(int i=0;i<8;i++)Check(slowPolicy.Id(i)==fastPolicy.Id(i)&&slowPolicy.State(i)==fastPolicy.State(i)&&
+        slowPolicy.Generation(i)==fastPolicy.Generation(i),"Fast ID full policy parity");
+}
+foreach(int id in new[]{-1,0,catalog.Count+1})
+{
+    foreach(var policy in new[]{slowPolicy,fastPolicy})
+    {try{policy.Demand(id,ResourcePriority.Visible);throw new Exception("Invalid demand ID accepted");}catch(ArgumentOutOfRangeException){}}
+}
+var plan=new DemandPlan(4);int[] order={1,2};int[] levels=new int[24];levels[1]=1;levels[2]=2;
+plan.Begin(order,2,levels,77,false);plan.Add(texture,ResourcePriority.Visible);plan.Add(texture,ResourcePriority.Prefetch);plan.Seal();
+Check(plan.Matches(order,2,levels,77,false)&&plan.Count==2&&plan.Ids[0]==plan.Ids[1]&&
+    plan.Priorities[0]!=plan.Priorities[1],"Demand plans preserve duplicate requests and priorities");
+levels[1]=0;Check(!plan.Matches(order,2,levels,77,false),"LOD change invalidates plan");levels[1]=1;
+Check(!plan.Matches(new[]{2,1},2,levels,77,false)&&!plan.Matches(order,1,levels,77,false)&&
+    !plan.Matches(order,2,levels,78,false)&&!plan.Matches(order,2,levels,77,true),"Plan key invalidation");
+plan.Begin(order,2,levels,77,false);for(int i=0;i<5;i++)plan.Add(texture+i%4,ResourcePriority.Visible);plan.Seal();
+Check(plan.Overflow&&!plan.Matches(order,2,levels,77,false),"Overflowed plan cannot replay truncated demand");
+Console.WriteLine("Prep optimization masks, scheduler parity and demand-plan invalidation: PASS");
+
+// Residency/generation changes do not stale a plan: only IDs are replayed through Demand.
+plan.Begin(order,1,levels,77,false);plan.Add(texture,ResourcePriority.Visible);plan.Seal();
+var replayPolicy=new ResourceScheduler(catalog,1,32768);
+int oldSlot=replayPolicy.Demand(texture,ResourcePriority.Visible);
+replayPolicy.BeginBatch(0,8192,1,batch,out _,out _);int oldTag=replayPolicy.Generation(oldSlot);
+replayPolicy.Complete(oldSlot,oldTag,true,0);replayPolicy.Publish(oldSlot,2048);
+replayPolicy.BeginDemand();replayPolicy.Evict(oldSlot,0);
+Check(plan.Matches(order,1,levels,77,false),"Stable ID plan survives residency changes");
+for(int i=0;i<plan.Count;i++)replayPolicy.Demand(plan.Ids[i],plan.Priorities[i]);
+Check(replayPolicy.State(replayPolicy.Find(texture))==ResourceState.Queued&&replayPolicy.Generation(oldSlot)!=oldTag,
+    "Plan replay restores live demand with a fresh generation");

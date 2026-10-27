@@ -11,7 +11,7 @@ permissions:
 jobs:
   validation:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: capz/DolphinDotNet
-          ref: ec6a42e87b3491d02f727ca4d15a7a47b171b302
+          ref: 83f8389c95a23c7fcba9658a775dc2af90f8419f
           path: vendor/sdk
       - uses: actions/setup-dotnet@v4
         with:
@@ -47,6 +47,32 @@ jobs:
           --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
           python3 tools/dolphin_validation.py out/native-${{ matrix.configuration }}/Game.dol
           --disc out/assets/world.iso --logs out/dolphin-${{ matrix.configuration }} --seconds 240
+      - name: Build performance comparison executable
+        if: matrix.configuration == 'Release'
+        env:
+          PERFORMANCE_SUITE: '1'
+        run: tools/build_validation.sh
+      - name: Run nine performance comparisons and progress checks
+        if: matrix.configuration == 'Release'
+        run: >-
+          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
+          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
+          python3 tools/dolphin_validation.py out/native-performance-Release/Game.dol
+          --suite performance --disc out/assets/world.iso
+          --logs out/dolphin-performance-Release --seconds 240
+      - name: Build frame-phase profiling executable
+        if: matrix.configuration == 'Release'
+        env:
+          PROFILING_SUITE: '1'
+        run: tools/build_validation.sh
+      - name: Run sixteen engine/SDK throughput comparisons
+        if: matrix.configuration == 'Release'
+        run: >-
+          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
+          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
+          python3 tools/dolphin_validation.py out/native-profiling-Release/Game.dol
+          --suite profiling --disc out/assets/world.iso
+          --logs out/dolphin-profiling-Release --seconds 360
       - name: Upload executable, assets, measurements and rendered evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -56,6 +82,8 @@ jobs:
             out/native-*/Game.dol
             out/native-*/Game.elf
             out/assets/
+            out/dolphin-*/*.csv
+            out/dolphin-*/*.md
             out/dolphin-*/*.json
             out/dolphin-*/*.png
             out/dolphin-*/*.log

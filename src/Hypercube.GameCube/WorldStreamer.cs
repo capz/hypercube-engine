@@ -32,7 +32,17 @@ public sealed class WorldStreamer : IDisposable
     private uint checksum;
     private bool stopping;
     public int Frame,CompletedFrame,Group=1,Format=14,ReadBatchBytes=32768,MaxBatchRecords=4;
-    public bool UseAram,InjectFaults;
+    public bool UseAram,InjectFaults,AdaptiveFallback,CoarseFirst,TexturesOnly,ProfileReads;
+    private long readAt;
+    private DemandPlan? demandPlan;
+    private bool recordDemandPlan;
+    public int DemandPlanHits,DemandPlanBuilds,DemandPlanOverflows;
+    public long ReadLatencyUs;
+    public int ReadLatencyCalls,MaxReadLatencyUs;
+    // Zero time budget retains legacy behavior. A single native call cannot be preempted.
+    public int ChecksumBytesPerPump=8192,CreatesPerPump=4,PumpBudgetUs;
+    public long PumpUs;
+    public int PumpCalls;
     public int ReadOperations,StorageBytes,AramBytes,Failures,ChecksumFailures,ShortReads,Corruptions,Delays,Batches,MaxBatch,
         MultiplePublications,CancelledUploads,UploadedBytes,ChecksumUs,MaxUploadUs,MaxPumpUs,MeshTriangles,Deferred,Publications;
     public int PhysicalBytes=>Textures.PhysicalBytes+otherBytes;
@@ -48,6 +58,7 @@ public sealed class WorldStreamer : IDisposable
     public void BeginDemand()=>Policy.BeginDemand();
     private void Demand(int id,ResourcePriority priority)
     {
+        if(recordDemandPlan)demandPlan!.Add(id,priority);
         if(Policy.Demand(id,priority)>=0)return;
         // Slot capacity is independent of byte capacity. Reclaim an unneeded
         // resident even when the byte budget itself still has room.
@@ -59,12 +70,38 @@ public sealed class WorldStreamer : IDisposable
         int cols=(6+Group-1)/Group;
         int tile=(cell/6/Group)*cols+(cell%6/Group);
         Demand(catalog.Texture(Format,Group,lod,tile),ResourcePriority.Visible);
-        for(int id=catalog.FirstMesh(cell,lod,raw);id!=0;id=catalog.Next(id))Demand(id,ResourcePriority.Visible);
-        if(lod<2)
+        for(int id=TexturesOnly?0:catalog.FirstMesh(cell,lod,raw);id!=0;id=catalog.Next(id))Demand(id,ResourcePriority.Visible);
+        bool ready=false;
+        if(AdaptiveFallback||CoarseFirst)
         {
-            Demand(catalog.Texture(Format,Group,lod+1,tile),ResourcePriority.Prefetch);
-            for(int id=catalog.FirstMesh(cell,lod+1);id!=0;id=catalog.Next(id))Demand(id,ResourcePriority.Prefetch);
+            int first=catalog.FirstMesh(cell,lod,raw);
+            ready=first!=0&&Ready(catalog.Texture(Format,Group,lod,tile));
+            for(int id=first;id!=0;id=catalog.Next(id))if(!Ready(id))ready=false;
         }
+        if(lod<2&&ScenePolicy.DemandFallback(AdaptiveFallback,ready))
+        {
+            var priority=CoarseFirst&&!ready?ResourcePriority.Coarse:ResourcePriority.Prefetch;
+            Demand(catalog.Texture(Format,Group,lod+1,tile),priority);
+            for(int id=TexturesOnly?0:catalog.FirstMesh(cell,lod+1);id!=0;id=catalog.Next(id))Demand(id,priority);
+        }
+    }
+    public void DemandCells(int[] order,int count,int[] lods,bool raw=false)
+    {
+        // Adaptive/coarse-first policies depend on readiness; expand afresh in that mode.
+        if(AdaptiveFallback||CoarseFirst)
+        {for(int i=0;i<count;i++)DemandCell(order[i],lods[order[i]],raw);return;}
+        if(demandPlan==null)demandPlan=new DemandPlan();
+        int config=(Format<<8)|(Group<<1)|(TexturesOnly?1:0);
+        if(demandPlan.Matches(order,count,lods,config,raw))
+        {
+            DemandPlanHits++;
+            for(int i=0;i<demandPlan.Count;i++)Demand(demandPlan.Ids[i],demandPlan.Priorities[i]);
+            return;
+        }
+        DemandPlanBuilds++;demandPlan.Begin(order,count,lods,config,raw);recordDemandPlan=true;
+        try{for(int i=0;i<count;i++)DemandCell(order[i],lods[order[i]],raw);}
+        finally{recordDemandPlan=false;}
+        demandPlan.Seal();if(demandPlan.Overflow)DemandPlanOverflows++;
     }
     public void DemandCollision(int cell)
     {if(cell>=0&&cell<24)Demand(catalog.Collision(cell),ResourcePriority.Gameplay);}
@@ -132,6 +169,7 @@ public sealed class WorldStreamer : IDisposable
         {tags[i]=Policy.Generation(batch[i]);batchIds[i]=Policy.Id(batch[i]);uploads[i]=stores[i]=null;observed[i]=false;}
         bool cached=UseAram;
         for(int i=0;i<count;i++)if(!Cold.Has(batchIds[i]))cached=false;
+        if(ProfileReads)readAt=Clock.Timestamp;
         reading=cached?ReadCold():stream.ReadAtAsync(batchOffset,staging,0,batchLength);
         if(cached)AramBytes+=batchLength;else{StorageBytes+=batchLength;ReadOperations++;}
         sequence++;Batches++;if(count>MaxBatch)MaxBatch=count;
@@ -193,7 +231,17 @@ public sealed class WorldStreamer : IDisposable
     }
     public void Pump()
     {
-        long pumpAt=Clock.Timestamp;int publishedBefore=Publications;
+        long pumpAt=Clock.Timestamp;
+        try{PumpWork(pumpAt);}
+        finally
+        {
+            int elapsed=(int)(Clock.Timestamp-pumpAt);PumpUs+=elapsed;PumpCalls++;
+            if(elapsed>MaxPumpUs)MaxPumpUs=elapsed;
+        }
+    }
+    private void PumpWork(long pumpAt)
+    {
+        int publishedBefore=Publications;
         Policy.CancelUnneeded();
         if(count==0){if(!stopping)Queue();return;}
         if(actualRead<0)
@@ -201,14 +249,20 @@ public sealed class WorldStreamer : IDisposable
             if(reading==null||!reading.IsCompleted||Frame<holdUntil)return;
             try{actualRead=reading.GetAwaiter().GetResult();}
             catch(IOException){actualRead=0;Failures++;}
+            if(ProfileReads)
+            {
+                int latency=(int)(Clock.Timestamp-readAt);ReadLatencyUs+=latency;ReadLatencyCalls++;
+                if(latency>MaxReadLatencyUs)MaxReadLatencyUs=latency;
+            }
             reading=null;
             if(InjectFaults&&sequence%7==3)
             {var r=catalog.Get(batchIds[count-1]);actualRead=r.Offset-batchOffset+r.Length-1;ShortReads++;}
             if(InjectFaults&&sequence%7==5)
             {var r=catalog.Get(batchIds[count-1]);staging.Read(one,r.Offset-batchOffset,0,1);one[0]^=128;staging.Write(one,0,r.Offset-batchOffset,1);Corruptions++;}
         }
-        int work=8192,created=0;
-        while(verifyRecord<count&&work>0&&created<4)
+        int work=ChecksumBytesPerPump,created=0;
+        while(verifyRecord<count&&work>0&&created<CreatesPerPump&&
+              (PumpBudgetUs==0||Clock.Timestamp-pumpAt<PumpBudgetUs))
         {
             int i=verifyRecord,slot=batch[i];var r=catalog.Get(batchIds[i]);
             bool valid=r.Offset-batchOffset+r.Length<=actualRead;
@@ -257,7 +311,6 @@ public sealed class WorldStreamer : IDisposable
         }
         if(Publications-publishedBefore>1)MultiplePublications++;
         if(done)count=0;
-        int elapsed=(int)(Clock.Timestamp-pumpAt);if(elapsed>MaxPumpUs)MaxPumpUs=elapsed;
     }
     public bool Stop()
     {

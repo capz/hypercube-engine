@@ -14,6 +14,7 @@ public sealed class ResourceScheduler
     private readonly int[] lookup;
     private readonly AssetCatalog catalog;
     private int nextGeneration = 1, order;
+    public bool ValidateIdsOnly;
     public int ResidentBytes { get; private set; }
     public int BudgetBytes { get; }
     public int Capacity => ids.Length;
@@ -37,7 +38,7 @@ public sealed class ResourceScheduler
     { for (int i = 0; i < ids.Length; i++) references[i] = 0; }
     public int Demand(int id, ResourcePriority priority)
     {
-        catalog.Get(id);
+        if(ValidateIdsOnly)catalog.ValidateId(id);else catalog.Get(id);
         int found = Find(id);
         if (found >= 0)
         {

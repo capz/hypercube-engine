@@ -20,6 +20,7 @@ public sealed class CellReadiness
 
 public static class ScenePolicy
 {
+    public static bool DemandFallback(bool adaptive, bool selectedReady) => !adaptive || !selectedReady;
     public static int Lod(float distance, int previous)
     {
         // Separate enter/leave thresholds prevent boundary oscillation.

@@ -16,7 +16,7 @@ W,H=640,480
 SIZE=W*H*3
 FIELDS=('magic','version','frame','scenario','caseFrames','dynamicKiB','nativeKiB','residentKiB','frame99ms','publications','reads','storageKiB','aramKiB','aramHits','reuse','evictions','failures','cancelled','maxBatch','multiPublish','draws','triangles','fallbacks','visibleCells','actorX256','actorY256','actorZ256','blocked','audioActive','recycledUploads','occluded','completedMask')
 
-def telemetry(rgb):
+def telemetry(rgb,fields=FIELDS,version=2):
     values=[]
     for field in range(32):
         value=0
@@ -27,8 +27,8 @@ def telemetry(rgb):
             if max(pixel)-min(pixel)>12: raise ValueError('Corrupt telemetry')
             if sum(pixel)>384:value|=1<<bit
         values.append(value)
-    state=dict(zip(FIELDS,values))
-    if values[:2]!=[0x4843,2]:raise ValueError('No guest telemetry')
+    state=dict(zip(fields,values))
+    if values[:2]!=[0x4843,version]:raise ValueError('No guest telemetry')
     return state
 
 def ffmpeg(args,log,**kwargs):
@@ -136,7 +136,7 @@ def validate(capture,root,smoke):
     if not smoke:proof['occlusionComparison']=dict(referenceDraws=completed[9]['draws'],culledDraws=completed[10]['draws'],comparedPixels=total,changedPixels=different,maxChannelDifference=max_delta)
     return proof
 
-def audio_proof(root,smoke):
+def audio_proof(root,smoke,minimum_seconds=100):
     proofs=[]
     for path in sorted((root/'user'/'Dump'/'Audio').glob('*dspdump*.wav')):
         with wave.open(str(path)) as wav:
@@ -149,7 +149,7 @@ def audio_proof(root,smoke):
                 elif started:quiet+=1;longest=max(longest,quiet)
             if started:
                 proofs.append(dict(file=path.name,seconds=frames/wav.getframerate(),activeWindows=active,longestQuietMs=longest*100))
-    if not proofs or max(p['seconds'] for p in proofs)<(5 if smoke else 100):raise AssertionError('No sustained non-silent DSP output')
+    if not proofs or max(p['seconds'] for p in proofs)<(5 if smoke else minimum_seconds):raise AssertionError('No sustained non-silent DSP output')
     if max(p['longestQuietMs'] for p in proofs)>300:raise AssertionError('Audio output contains a long silence during streaming')
     (root/'audio.json').write_text(json.dumps(proofs,indent=2)+'\n')
     return proofs
@@ -182,10 +182,16 @@ def run(args):
     captures=list((root/'user'/'Dump'/'Frames').glob('*.avi'))
     if len(captures)!=1:raise AssertionError(f'Expected one capture, got {captures}')
     ffmpeg(['-sseof','-1','-i',str(captures[0]),'-frames:v','1','-y',str(root/'tail.png')],root/'tail-encode.log')
-    proof=validate(captures[0],root,args.smoke)
-    proof['audio']=audio_proof(root,args.smoke)
+    if args.suite=='profiling':
+        from profiling_validation import validate as validate_profiling
+        proof=validate_profiling(captures[0],root,args.smoke)
+    elif args.suite=='performance':
+        from performance_validation import validate as validate_performance
+        proof=validate_performance(captures[0],root,args.smoke)
+    else:proof=validate(captures[0],root,args.smoke)
+    proof['audio']=audio_proof(root,args.smoke,minimum_seconds=70 if args.suite=='profiling' else 80 if args.suite=='performance' else 100)
     (root/'results.json').write_text(json.dumps(proof,indent=2)+'\n');print(json.dumps(proof))
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('dol',type=Path);p.add_argument('--disc',required=True,type=Path)
-    p.add_argument('--dsp',choices=['HLE','LLE'],default='LLE');p.add_argument('--logs',type=Path,required=True);p.add_argument('--seconds',type=float,default=200);p.add_argument('--smoke',action='store_true');p.add_argument('--binary',default='/usr/games/dolphin-emu-nogui');run(p.parse_args())
+    p.add_argument('--suite',choices=['validation','performance','profiling'],default='validation');p.add_argument('--dsp',choices=['HLE','LLE'],default='LLE');p.add_argument('--logs',type=Path,required=True);p.add_argument('--seconds',type=float,default=200);p.add_argument('--smoke',action='store_true');p.add_argument('--binary',default='/usr/games/dolphin-emu-nogui');run(p.parse_args())

@@ -4,7 +4,9 @@
   <Import Project="$(DolphinDotNetRoot)/sdk/DolphinDotNet.Sdk/Sdk/Sdk.props" />
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <DefineConstants Condition="'$(HypercubeProfiling)' == 'true'">$(DefineConstants);HYPERCUBE_PROFILING</DefineConstants>
     <DefineConstants Condition="'$(HypercubeCI)' == 'true'">$(DefineConstants);HYPERCUBE_CI</DefineConstants>
+    <DefineConstants Condition="'$(HypercubePerformance)' == 'true'">$(DefineConstants);HYPERCUBE_PERFORMANCE</DefineConstants>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../src/Hypercube.GameCube/Hypercube.GameCube.csproj" /></ItemGroup>
   <Import Project="$(DolphinDotNetRoot)/sdk/DolphinDotNet.Sdk/Sdk/Sdk.targets" />

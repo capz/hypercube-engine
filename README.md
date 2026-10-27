@@ -36,6 +36,33 @@ docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)" \
 
 The suite cycles automatically through eleven cases. A advances, X changes the dynamic cache budget (192/384/768 KiB; 24/48/96 KiB in the pressure case), Y pauses camera movement, START restarts the suite, R toggles results, B drains work and exits. The yellow actor moves only after destination collision is ready. Coarse visuals remain available while detail loads. The binary strip at the bottom supplies machine-readable measurements.
 
+## Performance experiments
+
+The original eleven cases remain the default. A separate executable compares adaptive fallback demand, coarse-first scheduling, bounded streaming work and compact telemetry rendering against repaired RGBA8 geometry:
+
+```sh
+PERFORMANCE_SUITE=1 tools/build_validation.sh
+# Mount the same data ISO, then boot out/native-performance-Release/Game.dol.
+# Or use the Dolphin container built above:
+docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)" \
+  --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin \
+  python3 tools/dolphin_validation.py out/native-performance-Release/Game.dol \
+  --suite performance --disc out/assets/world.iso --logs out/performance --seconds 240
+```
+
+The Python command requires Dolphin, Xvfb and FFmpeg; run it inside `hypercube-dolphin` as shown above. Hardware uses the same SD2SP2 asset path. The suite runs nine cases automatically and displays F50/F95/F99 frame times. START repeats the run, R toggles results. CI uploads both executables and `out/dolphin-performance-Release/results.json`. See [the experiment design and research](docs/performance-experiments.md) before choosing defaults. These are experiments; hardware results decide which settings to keep.
+
+## Frame-phase profiling
+
+```sh
+PROFILING_SUITE=1 tools/build_validation.sh
+# Mount out/assets/world.iso, then boot out/native-profiling-Release/Game.dol.
+```
+
+This separate sixteen-case suite compares baselines, work-isolation controls, and isolated preparation optimizations. It records exclusive streaming, mesh decode, native mesh creation, drawing, present, explicit delay, HUD, preparation and residual wall time. Present includes GPU completion and VSync; read latency includes queueing and frame polling.
+
+The result screens include cache budget and selected-detail readiness. Cases 11–15 compare productive SDK waits, native asset I/O, stride-64 polling, combined SDK settings and SDK plus prep. Cases 6–10 measure fast ID validation, tree masks, readiness reuse, demand-plan caching and their combination; case 5 repeats the baseline. R cycles nine screens covering all case groups. Press **R** to cycle timing/phase/quality pages. **X** changes the budget and restarts the entire suite, clearing all old rows; **START** also clears and restarts. The isolation cases deliberately remove work and are not equivalent-quality speedups. Run the same Docker command as above with `--suite profiling`, the profiling DOL, a fresh log directory and `--seconds 360`. CI runs and exports these comparisons too. See [profiling methodology](docs/frame-profiling.md).
+
 ## Dense asset intake
 
 ```sh
