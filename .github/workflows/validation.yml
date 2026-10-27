@@ -11,7 +11,7 @@ permissions:
 jobs:
   validation:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: capz/DolphinDotNet
-          ref: 83f8389c95a23c7fcba9658a775dc2af90f8419f
+          ref: 4964d0a6d6005b63b4ec087d064e860ae1c3d7eb
           path: vendor/sdk
       - uses: actions/setup-dotnet@v4
         with:
@@ -73,6 +73,19 @@ jobs:
           python3 tools/dolphin_validation.py out/native-profiling-Release/Game.dol
           --suite profiling --disc out/assets/world.iso
           --logs out/dolphin-profiling-Release --seconds 360
+      - name: Build SDK follow-up profiling executable
+        if: matrix.configuration == 'Release'
+        env:
+          SDK_FOLLOWUP_SUITE: '1'
+        run: tools/build_validation.sh
+      - name: Run sixteen SDK wait and direct-read comparisons
+        if: matrix.configuration == 'Release'
+        run: >-
+          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
+          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
+          python3 tools/dolphin_validation.py out/native-sdk-followup-Release/Game.dol
+          --suite sdk-followup --disc out/assets/world.iso
+          --logs out/dolphin-sdk-followup-Release --seconds 360
       - name: Upload executable, assets, measurements and rendered evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -182,16 +182,16 @@ def run(args):
     captures=list((root/'user'/'Dump'/'Frames').glob('*.avi'))
     if len(captures)!=1:raise AssertionError(f'Expected one capture, got {captures}')
     ffmpeg(['-sseof','-1','-i',str(captures[0]),'-frames:v','1','-y',str(root/'tail.png')],root/'tail-encode.log')
-    if args.suite=='profiling':
+    if args.suite in ('profiling','sdk-followup'):
         from profiling_validation import validate as validate_profiling
-        proof=validate_profiling(captures[0],root,args.smoke)
+        proof=validate_profiling(captures[0],root,args.smoke,followup=args.suite=='sdk-followup')
     elif args.suite=='performance':
         from performance_validation import validate as validate_performance
         proof=validate_performance(captures[0],root,args.smoke)
     else:proof=validate(captures[0],root,args.smoke)
-    proof['audio']=audio_proof(root,args.smoke,minimum_seconds=70 if args.suite=='profiling' else 80 if args.suite=='performance' else 100)
+    proof['audio']=audio_proof(root,args.smoke,minimum_seconds=70 if args.suite in ('profiling','sdk-followup') else 80 if args.suite=='performance' else 100)
     (root/'results.json').write_text(json.dumps(proof,indent=2)+'\n');print(json.dumps(proof))
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('dol',type=Path);p.add_argument('--disc',required=True,type=Path)
-    p.add_argument('--suite',choices=['validation','performance','profiling'],default='validation');p.add_argument('--dsp',choices=['HLE','LLE'],default='LLE');p.add_argument('--logs',type=Path,required=True);p.add_argument('--seconds',type=float,default=200);p.add_argument('--smoke',action='store_true');p.add_argument('--binary',default='/usr/games/dolphin-emu-nogui');run(p.parse_args())
+    p.add_argument('--suite',choices=['validation','performance','profiling','sdk-followup'],default='validation');p.add_argument('--dsp',choices=['HLE','LLE'],default='LLE');p.add_argument('--logs',type=Path,required=True);p.add_argument('--seconds',type=float,default=200);p.add_argument('--smoke',action='store_true');p.add_argument('--binary',default='/usr/games/dolphin-emu-nogui');run(p.parse_args())

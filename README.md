@@ -75,3 +75,5 @@ Static OBJ, glTF 2.0 and GLB are supported. The validation envelope is X=0..24, 
 The default fixture is **synthetic adversarial input**, not output from an AI model. It includes duplicate corners/faces, degenerates, multiple materials, dense curved ground, an isolated component and an opaque occluder. Imported assets currently receive a planar diagnostic checker: authored PBR textures are not baked. The animated probe actor uses a rigid rotating mesh. Collision is a sampled top surface, not general mesh physics.
 
 Read [the implementation and decision gates](docs/streaming-validation.md), [rendering design](docs/README.md) and [memory hypotheses](docs/memory-and-validation.md). Dolphin establishes correctness and comparative emulator measurements; hardware measurements decide SD/drive latency, DSP/ARAM contention, visual LOD quality and final defaults.
+
+The next SDK iteration has a separate [wait/read follow-up suite](docs/sdk-followup.md): `SDK_FOLLOWUP_SUITE=1 tools/build_validation.sh`, then `--suite sdk-followup` in the validator. It compares completion checks, deadline hints and aligned 16/32/64 KiB native reads with four-page protocol-v7 diagnostics.
