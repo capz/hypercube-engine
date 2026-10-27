@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: capz/DolphinDotNet
-          ref: 593ec9e54a6ec498d16319889ab05aadbc36f72b
+          ref: 83f8389c95a23c7fcba9658a775dc2af90f8419f
           path: vendor/sdk
       - uses: actions/setup-dotnet@v4
         with:

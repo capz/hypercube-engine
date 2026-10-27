@@ -1,6 +1,6 @@
 # SDK throughput implementation and next steps
 
-DolphinDotNet [PR #126](https://github.com/capz/DolphinDotNet/pull/126), pinned at `593ec9e54a6ec498d16319889ab05aadbc36f72b`, implements the first throughput tranche. Hypercube [PR #2](https://github.com/capz/hypercube-engine/pull/2) consumes that commit and extends the profiling suite to sixteen protocol-v6 cases at 384 KiB. The original [proposal](sdk-throughput-proposal.md) remains a roadmap, not a claim that every proposed subsystem is implemented.
+DolphinDotNet [PR #126](https://github.com/capz/DolphinDotNet/pull/126), benchmarked at `593ec9e54a6ec498d16319889ab05aadbc36f72b`, implements the first throughput tranche. Hypercube [PR #2](https://github.com/capz/hypercube-engine/pull/2) consumes that commit and extends the profiling suite to sixteen protocol-v6 cases at 384 KiB. The original [proposal](sdk-throughput-proposal.md) remains a roadmap, not a claim that every proposed subsystem is implemented.
 
 ## Implemented SDK changes
 
@@ -37,6 +37,12 @@ The first capture overlapped host compiler/graphics validation for part of its d
 SDK validation includes all 23 native Makefile test binaries, native read byte/range/EOF and disposal-lifetime checks, exclusive buffer access, productive-wait background progress/context restoration, and 64-versus-1 poll stride counters. AOT compiler integration exercises reference/scalar loads and System.Action arrays with callback queue growth, wrapped indices and FIFO order in Debug and Release, both normally and with GC stress. Compiler and graphics acceptance suites pass on Linux and SDK CI passes on macOS, with separate Windows/macOS build/launch checks. Hypercube Debug/Release host tests and 24 Python tests pass. A clean SDK git archive also passes native tests and CI selection/coverage tests; no untracked checkout fixtures are required.
 
 All 49 bundled native SDK source files match the pin. The DOL was built before the final fixture-only commits; those commits change tests/CI, not production source or code generation.
+
+## Legacy mode retirement
+
+The legacy managed asset-read path and `UseNativeReads` switch are temporary validation support, scheduled for removal after repeated Dolphin and hardware comparisons establish native reads as the performant way forward. Preserve representative frame-time/throughput wins, detail readiness, streaming/actor progress, audio and memory bounds, and short-read/error/cancellation/disposal correctness before closing validation. Current emulator results alone do not authorize removing the fallback.
+
+At that point remove the SDK selector, legacy FileStream handle, 8 KiB staging buffer and chunked Step/Publish path together. Retire/rebaseline Hypercube's legacy A/B cases and protocol/report expectations, retain these historical measurements, and keep native-path correctness and performance regression coverage. The tracking TODOs are beside the SDK selector and Hypercube case configuration; runtime behavior is unchanged.
 
 ## Remaining SDK opportunities
 

@@ -54,6 +54,9 @@ internal sealed partial class ProbeScene
     }
     private void ConfigureProfile()
     {
+        // TODO(throughput-validation): Retire legacy-read A/B cases with the SDK
+        // fallback after repeated Dolphin/hardware results establish native reads
+        // as the performant path. Preserve historical results and rebaseline tests.
         Dolphin.Storage.AssetStream.UseNativeReads=scenario==12||scenario==14||scenario==15;
         Dolphin.Threading.Tasks.Scheduler.ProductiveWaits=scenario==11||scenario>=14;
         Dolphin.Threading.Tasks.Scheduler.PollStride=scenario>=13?64:1;
