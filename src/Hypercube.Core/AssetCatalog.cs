@@ -40,7 +40,7 @@ public readonly struct AssetRecord
 
 public sealed class AssetCatalog
 {
-    private readonly byte[] index;
+    private readonly AssetRecord[] records;
     private readonly int[] textures = new int[576], collisions = new int[24], meshHeads = new int[96], patchHeads = new int[85];
     private readonly int[] next;
     public int Count { get; }
@@ -56,7 +56,9 @@ public sealed class AssetCatalog
             DataOffset < 32 + index.Length || (DataOffset & 31) != 0 || Length != actualLength || DataOffset > Length ||
             Binary.Crc(index, 0, index.Length) != Binary.U32(header, 24))
             throw new IOException("Invalid pack index bounds or checksum.");
-        this.index = index; next = new int[Count + 1];var meshTails=new int[96];
+        records = new AssetRecord[Count];
+        for(int i=0;i<Count;i++)records[i]=new AssetRecord(index,i*64);
+        next = new int[Count + 1];var meshTails=new int[96];
         int end = DataOffset, scenes = 0;
         for (int i = 1; i <= Count; i++)
         {
@@ -112,7 +114,7 @@ public sealed class AssetCatalog
     public AssetRecord Get(int id)
     {
         if (id < 1 || id > Count) throw new ArgumentOutOfRangeException("id");
-        return new AssetRecord(index, (id - 1) * 64);
+        return records[id-1];
     }
     public int Texture(int format, int group, int mip, int cell)
     {

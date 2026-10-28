@@ -115,6 +115,20 @@ class ProfilingProof(unittest.TestCase):
         pages.append(dict(pages[0],page=3,**{f'word{i}':value for i,value in enumerate(counters)}))
         return pages
 
+    def test_execution_pages_preserve_full_window_and_reject_missing_or_overlapping_time(self):
+        pages=self.followup_packets(10)
+        for page in pages:page.update(version=9,scenario=0,completedMask=1)
+        values=[26000,28000,40000,200,1000,10000]+[0]*10
+        pages.append(dict(pages[0],page=4,**{f'word{i}':v for i,v in enumerate(values)}))
+        collector=Collector(execution=True)
+        for page in pages[:4]:collector.observe(page)
+        with self.assertRaises(AssertionError):collector.result(0)
+        collector.observe(pages[4]);self.assertEqual(collector.result(0)['execution']['meanUs'],26000)
+        for field,value in [('word0',25000),('word3',199),('word1',41000)]:
+            changed=Collector(execution=True)
+            for page in pages:changed.observe(dict(page,**({field:value} if page['page']==4 else {})))
+            with self.subTest(field=field),self.assertRaises(AssertionError):changed.result(0)
+
     def test_texture_followup_protocol8_checks_clear_and_read_modes(self):
         for case,flags in enumerate(TEXTURE_FLAGS):
             pages=self.followup_packets(case)

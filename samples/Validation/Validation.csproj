@@ -3,6 +3,7 @@
   <PropertyGroup><ImportDirectoryBuildProps>false</ImportDirectoryBuildProps></PropertyGroup>
   <Import Project="$(DolphinDotNetRoot)/sdk/DolphinDotNet.Sdk/Sdk/Sdk.props" />
   <PropertyGroup>
+    <DefineConstants Condition="'$(HypercubeOneMs)' == 'true'">$(DefineConstants);HYPERCUBE_ONEMS;HYPERCUBE_TEXTURE_FOLLOWUP;HYPERCUBE_FOLLOWUP;HYPERCUBE_PROFILING</DefineConstants>
     <OutputType>Exe</OutputType>
     <DefineConstants Condition="'$(HypercubeTextureFollowup)' == 'true'">$(DefineConstants);HYPERCUBE_TEXTURE_FOLLOWUP;HYPERCUBE_FOLLOWUP;HYPERCUBE_PROFILING</DefineConstants>
     <DefineConstants Condition="'$(HypercubeFollowup)' == 'true'">$(DefineConstants);HYPERCUBE_FOLLOWUP;HYPERCUBE_PROFILING</DefineConstants>

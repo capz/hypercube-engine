@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
   <ItemGroup><ProjectReference Include="../../src/Hypercube.Core/Hypercube.Core.csproj" /></ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../samples/Validation/DemandOrder.cs" Link="DemandOrder.cs" />
+    <Compile Include="../../samples/Validation/ExecutionMetrics.cs" Link="ExecutionMetrics.cs" />
+  </ItemGroup>
 </Project>

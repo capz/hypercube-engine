@@ -9,19 +9,21 @@ FOLLOWUP_NAMES=('PREVIOUS SDK','COMPLETE CHECK','DIRECT 16K','DIRECT 32K','DIREC
 FOLLOWUP_FLAGS=(1792,3840,9984,18176,34560,5888,20224,24336,16144,40720,24560,24344,1792,24336,23824,1808)
 TEXTURE_NAMES=('PREVIOUS SDK','SDK 2D','DIRECT16 SDK2D','DIRECT32 SDK2D','DIRECT64 SDK2D','DEADLINE SDK2D','CHECK DIRECT32 SDK2D','ALL32 SDK2D','ALL16 SDK2D','ALL64 SDK2D','ALL32 PREP SDK2D','NO DELAY SDK2D','PREVIOUS REPEAT','ALL32 SDK2D REPEAT','POLL1 SDK2D','APP TIMERS SDK2D')
 TEXTURE_FLAGS=(1792,1824,10080,18272,34656,5984,20320,24432,16240,40816,24560,24440,1792,24432,23920,1904)
+EXECUTION_NAMES=('SDK EXECUTION',)
+EXECUTION_FLAGS=(24560,)
 PHASES=('streamOther','decode','meshCreate','draw','present','yield','hud','prepare','other')
 COMMON=('magic','version','frame','scenario','samples','budgetKiB','dynamicKiB','completedMask',
         'page','flags','actorX256','actorZ256','audioActive','failures','selectedPermille','blocked')
 FIELDS=COMMON+tuple(f'word{i}' for i in range(16))
 
 
-def check_packet(s,followup=False,texture=False):
-    followup=followup or texture
-    names,flags=(TEXTURE_NAMES,TEXTURE_FLAGS) if texture else (FOLLOWUP_NAMES,FOLLOWUP_FLAGS) if followup else (NAMES,FLAGS)
-    if s['version']!=(8 if texture else 7 if followup else 6):
+def check_packet(s,followup=False,texture=False,execution=False):
+    followup=followup or texture or execution
+    names,flags=(EXECUTION_NAMES,EXECUTION_FLAGS) if execution else (TEXTURE_NAMES,TEXTURE_FLAGS) if texture else (FOLLOWUP_NAMES,FOLLOWUP_FLAGS) if followup else (NAMES,FLAGS)
+    if s['version']!=(9 if execution else 8 if texture else 7 if followup else 6):
         raise AssertionError('Wrong profiling protocol')
     case=s['scenario']
-    if not 0<=case<len(names) or s['flags']!=flags[case] or not 0<=s['page']<(4 if followup else 3):
+    if not 0<=case<len(names) or s['flags']!=flags[case] or not 0<=s['page']<(5 if execution else 4 if followup else 3):
         raise AssertionError('Unknown profiling case/page/flags')
     if s['budgetKiB'] not in (192,384,768) or s['dynamicKiB']>s['budgetKiB']:
         raise AssertionError('Invalid profiling budget')
@@ -32,16 +34,17 @@ def check_packet(s,followup=False,texture=False):
 
 
 class Collector:
-    def __init__(self,followup=False,texture=False):
-        followup=followup or texture
+    def __init__(self,followup=False,texture=False,execution=False):
+        followup=followup or texture or execution
+        self.execution=execution
         self.texture=texture
         self.followup=followup
-        self.names=TEXTURE_NAMES if texture else FOLLOWUP_NAMES if followup else NAMES
-        self.page_count=4 if followup else 3
+        self.names=EXECUTION_NAMES if execution else TEXTURE_NAMES if texture else FOLLOWUP_NAMES if followup else NAMES
+        self.page_count=5 if execution else 4 if followup else 3
         self.pages={};self.identities={};self.budget=None
 
     def observe(self,s):
-        check_packet(s,self.followup,self.texture)
+        check_packet(s,self.followup,self.texture,self.execution)
         if self.budget is None:self.budget=s['budgetKiB']
         if self.budget!=s['budgetKiB']:raise AssertionError('Mixed budgets in one profiling run')
         case=s['scenario']
@@ -81,7 +84,23 @@ class Collector:
                 quantumKiB=d['word13'],modeBits=d['word14'],timerLateMaxUs=d['word15']*10)
             check_sdk_result(result)
         check_result(result)
+        if self.execution:
+            e=pages[4]
+            result['execution']=dict(meanUs=e['word0'],p99Us=e['word1'],maxUs=e['word2'],samples=e['word3'],gpuMeanUs=e['word4'],viMeanUs=e['word5'])
+            parts=('movement','visibilityDemand','guards','resolve','traverseSort','camera','detailAccounting')
+            result['execution']['prepMeanUs']={name:e[f'word{6+i}'] for i,name in enumerate(parts)}
+            check_execution_result(result)
         return result
+
+
+def check_execution_result(r):
+    e=r['execution']
+    if e['samples']!=r['samples'] or not 0<e['meanUs']<=e['maxUs'] or not 0<e['p99Us']<=e['maxUs']+15:
+        raise AssertionError('Invalid execution window')
+    # Packet frame/phase means round down to 10 us; execution/waits to 1 us.
+    expected=r['frameMeanUs']-r['phaseMeanUs']['yield']-e['gpuMeanUs']-e['viMeanUs']
+    if abs(expected-e['meanUs'])>20:
+        raise AssertionError('Execution, yield and blocking waits do not close')
 
 
 def check_result(r):
@@ -166,13 +185,13 @@ def write_report(results,root,followup=False):
     (root/'comparison.md').write_text('\n'.join(lines)+'\n')
 
 
-def validate(capture,root,smoke,followup=False,texture=False):
-    followup=followup or texture
-    names=TEXTURE_NAMES if texture else FOLLOWUP_NAMES if followup else NAMES
+def validate(capture,root,smoke,followup=False,texture=False,execution=False):
+    followup=followup or texture or execution
+    names=EXECUTION_NAMES if execution else TEXTURE_NAMES if texture else FOLLOWUP_NAMES if followup else NAMES
     from dolphin_validation import SIZE,telemetry,scene_pixels,ground_coverage,ffmpeg
     cmd=['ffmpeg','-threads','1','-v','error','-i',str(capture),'-vf','fps=2,scale=640:480:flags=neighbor',
          '-f','rawvideo','-pix_fmt','rgb24','pipe:1']
-    states=[];collector=Collector(followup,texture);pixels={};actors={};positions={};last_mask=0;images={}
+    states=[];collector=Collector(followup,texture,execution);pixels={};actors={};positions={};last_mask=0;images={}
     with (root/'decode.log').open('wb') as err:
         process=subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=err)
         try:
@@ -180,7 +199,7 @@ def validate(capture,root,smoke,followup=False,texture=False):
                 rgb=process.stdout.read(SIZE)
                 if not rgb:break
                 if len(rgb)!=SIZE:raise AssertionError('Truncated frame')
-                try:s=telemetry(rgb,fields=FIELDS,version=8 if texture else 7 if followup else 6)
+                try:s=telemetry(rgb,fields=FIELDS,version=9 if execution else 8 if texture else 7 if followup else 6)
                 except ValueError:
                     if states:raise AssertionError('Lost profiling telemetry')
                     continue
@@ -215,5 +234,5 @@ def validate(capture,root,smoke,followup=False,texture=False):
         # Save from decoded frames; unfinalized AVI indices can make end-seeks return the first frame.
         (root/'tail.png').write_bytes((root/f'case-{max(images):02}.png').read_bytes())
     if not smoke:write_report(results,root,followup)
-    return dict(comparisons=comparison_rows(results,followup) if not smoke else [],suite='texture-followup' if texture else 'sdk-followup' if followup else 'profiling',smoke=smoke,sampledFrames=len(states),completedCases=results,last=states[-1],
-                note='Isolation cases intentionally remove work; phase intervals are wall time, not exclusive CPU or GPU time.')
+    return dict(comparisons=comparison_rows(results,followup) if not smoke else [],suite='one-ms' if execution else 'texture-followup' if texture else 'sdk-followup' if followup else 'profiling',smoke=smoke,sampledFrames=len(states),completedCases=results,last=states[-1],
+                note=('Execution is the foreground frame window minus measured GX/VI blocking and explicit yield. It includes gate contention and excludes background work overlapping waits; it is not a hardware CPU-cycle or complete GPU timing measurement.' if execution else 'Isolation cases intentionally remove work; phase intervals are wall time, not exclusive CPU or GPU time.'))

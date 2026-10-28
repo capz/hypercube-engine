@@ -271,3 +271,72 @@ Check(plan.Matches(order,1,levels,77,false),"Stable ID plan survives residency c
 for(int i=0;i<plan.Count;i++)replayPolicy.Demand(plan.Ids[i],plan.Priorities[i]);
 Check(replayPolicy.State(replayPolicy.Find(texture))==ResourceState.Queued&&replayPolicy.Generation(oldSlot)!=oldTag,
     "Plan replay restores live demand with a fresh generation");
+
+// First-free selection remains observable and deterministic through every
+// missing-state transition, including capacities crossing a 32-slot word.
+var freeSlotRandom=new Random(711);
+foreach(int capacity in new[]{1,31,32,33,64,255,256})
+{
+    var policy=new ResourceScheduler(catalog,capacity,1024*1024);
+    var wanted=new HashSet<int>();var issued=new int[8];
+    for(int round=0;round<30;round++)
+    {
+        policy.BeginDemand();wanted.Clear();
+        for(int step=0;step<capacity*2;step++)
+        {
+            int id=1+freeSlotRandom.Next(catalog.Count),expected=policy.Find(id);
+            if(expected<0)for(int i=0;i<capacity;i++)if(policy.State(i)==ResourceState.Missing){expected=i;break;}
+            if(expected<0)for(int i=0;i<capacity;i++)if(!wanted.Contains(policy.Id(i))&&
+                (policy.State(i)==ResourceState.Queued||policy.State(i)==ResourceState.Failed)){expected=i;break;}
+            int actual=policy.Demand(id,ResourcePriority.Visible);
+            Check(actual==expected,"First-free bitmap agrees with independent slot scan");if(actual>=0)wanted.Add(id);
+            if(step%5==0){int victim=policy.Id(freeSlotRandom.Next(capacity));if(policy.Cancel(victim))wanted.Remove(victim);}
+        }
+        policy.CancelUnneeded();
+        int issuedCount=policy.BeginBatch(round*100,1024*1024,8,issued,out _,out _);
+        for(int i=0;i<issuedCount;i++)
+        {
+            int at=issued[i],tag=policy.Generation(at),id=policy.Id(at);
+            Check(!policy.Complete(at,tag+1,true,round*100),"Wrong generation leaves issued slot intact");
+            if(i%4==0)
+            {
+                policy.Cancel(id);wanted.Remove(id);
+                if(round%2==0)policy.ReleaseRetired(at);
+                else Check(!policy.Complete(at,tag,true,round*100),"Retired completion frees slot");
+            }
+            else if(policy.Complete(at,tag,true,round*100))
+            {if(i%3==0)policy.Defer(at,round*100);else policy.Publish(at,64);}
+        }
+        policy.BeginDemand();wanted.Clear();policy.CancelUnneeded();
+        for(int i=0;i<capacity;i++)if(policy.State(i)==ResourceState.Resident)policy.Evict(i,int.MaxValue);
+    }
+}
+// Stable nearest-first ordering must preserve the old repeated-minimum policy.
+for(int trial=0;trial<1000;trial++)
+{
+    var onScreen=new bool[24];var distance=new float[24];var fast=new int[25];var slow=new int[24];
+    fast[24]=-917;
+    for(int i=0;i<24;i++){onScreen[i]=freeSlotRandom.Next(4)!=0;distance[i]=freeSlotRandom.Next(65)*.25f;}
+    int countFast=DemandOrder.Build(fast,onScreen,distance),countSlow=0,chosen=0;
+    for(int pass=0;pass<24;pass++)
+    {
+        int next=-1;
+        for(int i=0;i<24;i++)if(onScreen[i]&&(chosen&(1<<i))==0&&(next<0||distance[i]<distance[next]))next=i;
+        if(next<0||distance[next]>=12)break;slow[countSlow++]=next;chosen|=1<<next;
+    }
+    Check(countFast==countSlow&&fast[24]==-917,"Demand ordering preserves bounds and threshold");
+    for(int i=0;i<countFast;i++)Check(fast[i]==slow[i],"Demand ordering preserves priorities and equal-distance ties");
+}
+var execution=new ExecutionMetrics();
+for(int i=0;i<100;i++)execution.Record(10000,1000,6000);
+Check(execution.Samples==100&&execution.Mean==3000&&execution.Maximum==3000&&execution.P99==3008,
+    "Execution timing excludes only measured GPU and VI blocking");
+Check(execution.GpuMean==1000&&execution.ViMean==6000,"Blocking timing remains separately visible");
+try{execution.Record(1,1,1);throw new Exception("Accepted overlapping waits");}catch(InvalidOperationException){}
+Check(execution.Samples==100,"Invalid timing does not corrupt the sample window");
+execution.Reset();Check(execution.Samples==0&&execution.Mean==0&&execution.Maximum==0,"Restart clears execution history");
+execution.Record(100000,0,0);Check(execution.P99==100000,"Overflow histogram retains maximum");
+var stableIndex=(byte[])index.Clone();var stableCatalog=new AssetCatalog(header,stableIndex,raw.Length);
+var beforeMutation=stableCatalog.Get(1);Array.Clear(stableIndex);
+Check(stableCatalog.Get(1).Equals(beforeMutation),"Validated metadata remains immutable after input mutation");
+Console.WriteLine("Free-slot transitions, stable demand ordering, cached metadata and execution accounting passed.");

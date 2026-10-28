@@ -12,6 +12,7 @@ public sealed class ResourceScheduler
     private readonly int[] ids, priorities, generations, retries, references, pins, touched, fences;
     private readonly ResourceState[] states;
     private readonly int[] lookup;
+    private readonly uint[] freeMasks;
     private readonly AssetCatalog catalog;
     private int nextGeneration = 1, order;
     public bool ValidateIdsOnly;
@@ -27,6 +28,8 @@ public sealed class ResourceScheduler
         retries = new int[capacity]; references = new int[capacity]; pins = new int[capacity]; touched = new int[capacity];
         states = new ResourceState[capacity]; fences = new int[capacity]; lookup = new int[catalog.Count+1];
         for(int i=0;i<lookup.Length;i++)lookup[i]=-1;
+        freeMasks=new uint[(capacity+31)/32];
+        for(int i=0;i<capacity;i++)freeMasks[i>>5]|=1u<<(i&31);
     }
     public int Id(int slot) => ids[slot];
     public int Generation(int slot) => generations[slot];
@@ -36,6 +39,22 @@ public sealed class ResourceScheduler
     { return id>0&&id<lookup.Length&&lookup[id]>=0&&states[lookup[id]]!=ResourceState.Missing?lookup[id]:-1; }
     public void BeginDemand()
     { for (int i = 0; i < ids.Length; i++) references[i] = 0; }
+    private int FirstFree()
+    {
+        for(int word=0;word<freeMasks.Length;word++)
+        {
+            uint mask=freeMasks[word];if(mask==0)continue;
+            int bit=0;
+            if((mask&65535)==0){mask>>=16;bit+=16;}
+            if((mask&255)==0){mask>>=8;bit+=8;}
+            if((mask&15)==0){mask>>=4;bit+=4;}
+            if((mask&3)==0){mask>>=2;bit+=2;}
+            if((mask&1)==0)bit++;
+            return word*32+bit;
+        }
+        return -1;
+    }
+    private void Missing(int slot){states[slot]=ResourceState.Missing;freeMasks[slot>>5]|=1u<<(slot&31);}
     public int Demand(int id, ResourcePriority priority)
     {
         if(ValidateIdsOnly)catalog.ValidateId(id);else catalog.Get(id);
@@ -47,8 +66,7 @@ public sealed class ResourceScheduler
             if(states[found]==ResourceState.Resident)touched[found]=++order;
             return found;
         }
-        int free=-1;
-        for(int i=0;i<ids.Length;i++)if(states[i]==ResourceState.Missing){free=i;break;}
+        int free=FirstFree();
         if(free<0)for(int i=0;i<ids.Length;i++)if(references[i]==0&&
             (states[i]==ResourceState.Queued||states[i]==ResourceState.Failed))
         {free=i;Cancelled++;break;}
@@ -57,6 +75,7 @@ public sealed class ResourceScheduler
             int i=free;
             if(ids[i]>0&&lookup[ids[i]]==i)lookup[ids[i]]=-1;
             ids[i] = id; lookup[id]=i; states[i] = ResourceState.Queued; priorities[i] = (int)priority;
+            freeMasks[i>>5]&=~(1u<<(i&31));
             references[i] = 1; touched[i] = ++order; generations[i] = nextGeneration++;
             retries[i] = 0; return i;
         }
@@ -69,7 +88,7 @@ public sealed class ResourceScheduler
         int slot=Find(id);
         if(slot<0||states[slot]==ResourceState.Resident||states[slot]==ResourceState.Retiring)return false;
         bool issued=states[slot]==ResourceState.Reading||states[slot]==ResourceState.Ready;
-        states[slot]=issued?ResourceState.Retiring:ResourceState.Missing;
+        if(issued)states[slot]=ResourceState.Retiring;else Missing(slot);
         references[slot]=0;generations[slot]=nextGeneration++;Cancelled++;return true;
     }
     public void CancelUnneeded()
@@ -77,7 +96,7 @@ public sealed class ResourceScheduler
         for (int i = 0; i < ids.Length; i++) if (references[i] == 0)
         {
             if (states[i] == ResourceState.Queued || states[i] == ResourceState.Failed)
-            { states[i] = ResourceState.Missing; generations[i] = nextGeneration++; Cancelled++; }
+            { Missing(i); generations[i] = nextGeneration++; Cancelled++; }
             else if (states[i] == ResourceState.Reading || states[i] == ResourceState.Ready)
             { states[i] = ResourceState.Retiring; generations[i] = nextGeneration++; Cancelled++; }
         }
@@ -124,9 +143,9 @@ public sealed class ResourceScheduler
     public bool Complete(int slot, int generation, bool valid, int now)
     {
         if (states[slot] == ResourceState.Retiring)
-        { states[slot] = ResourceState.Missing; Stale++; return false; }
+        { Missing(slot); Stale++; return false; }
         if (generations[slot] != generation) { Stale++; return false; }
-        if (references[slot] == 0) { states[slot] = ResourceState.Missing; Stale++; return false; }
+        if (references[slot] == 0) { Missing(slot); Stale++; return false; }
         if (states[slot] != ResourceState.Reading) throw new InvalidOperationException("Resource is not reading.");
         states[slot] = valid ? ResourceState.Ready : ResourceState.Failed;
         if (!valid) { retries[slot] = now + 20; Retries++; }
@@ -155,13 +174,13 @@ public sealed class ResourceScheduler
         if (states[slot] != ResourceState.Resident || references[slot] != 0 && priorities[slot] <= (int)incoming ||
             fences[slot] > completedFrame)
             throw new InvalidOperationException("Resource is demanded or in flight.");
-        ResidentBytes -= pins[slot]; pins[slot] = 0; states[slot] = ResourceState.Missing;
+        ResidentBytes -= pins[slot]; pins[slot] = 0; Missing(slot);
         generations[slot] = nextGeneration++; Evicted++;
     }
     public void ReleaseRetired(int slot)
     {
         if (states[slot] != ResourceState.Retiring) throw new InvalidOperationException("Resource is not retiring.");
-        states[slot] = ResourceState.Missing;
+        Missing(slot);
     }
     public void Defer(int slot, int now)
     {

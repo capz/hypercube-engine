@@ -23,8 +23,15 @@ internal sealed partial class ProbeScene
 #else
     private const bool TextureFollowup=false;
 #endif
+#if HYPERCUBE_ONEMS
+    private const bool OneMsSuite=true;
+    private const int ProfileCases=1;
+    private readonly ExecutionMetrics execution=new ExecutionMetrics();
+#else
+    private const bool OneMsSuite=false;
     private const int ProfileCases=16;
-    private const int ProfilePages=FollowupSuite?4:3;
+#endif
+    private const int ProfilePages=OneMsSuite?5:FollowupSuite?4:3;
     private const int ProfilePageMilliseconds=750;
     private readonly string[] legacyFollowupNames={"PREVIOUS SDK","COMPLETE CHECK","DIRECT 16K","DIRECT 32K","DIRECT 64K","DEADLINE WAIT","CHECK DIRECT32","ALL 32K","ALL 16K","ALL 64K","ALL32 AND PREP","ALL32 NO DELAY","PREVIOUS REPEAT","ALL32 REPEAT","ALL32 POLL1","APP TIMERS ONLY"};
     private readonly int[] legacyFollowupFlags={1792,3840,9984,18176,34560,5888,20224,24336,16144,40720,24560,24344,1792,24336,23824,1808};
@@ -40,10 +47,10 @@ internal sealed partial class ProbeScene
 #else
         legacyFollowupFlags;
 #endif
-    private bool OptimizeIds=>ProfilingSuite&&(FollowupSuite?scenario==10:(ProfileFlags&16)!=0);
-    private bool OptimizeTree=>ProfilingSuite&&(FollowupSuite?scenario==10:(ProfileFlags&32)!=0);
-    private bool OptimizeReady=>ProfilingSuite&&(FollowupSuite?scenario==10:(ProfileFlags&64)!=0);
-    private bool OptimizeDemand=>ProfilingSuite&&(FollowupSuite?scenario==10:(ProfileFlags&128)!=0);
+    private bool OptimizeIds=>ProfilingSuite&&(FollowupSuite?(OneMsSuite||scenario==10):(ProfileFlags&16)!=0);
+    private bool OptimizeTree=>ProfilingSuite&&(FollowupSuite?(OneMsSuite||scenario==10):(ProfileFlags&32)!=0);
+    private bool OptimizeReady=>ProfilingSuite&&(FollowupSuite?(OneMsSuite||scenario==10):(ProfileFlags&64)!=0);
+    private bool OptimizeDemand=>ProfilingSuite&&(FollowupSuite?(OneMsSuite||scenario==10):(ProfileFlags&128)!=0);
     private readonly int[] demandOrder=new int[24];
     private int visibleMask,detailMask,selectedReadyMask;
     private readonly string[] profileNames={"BASE","COARSE ONLY","TEXTURE ONLY","NO WORLD DRAW","NO DELAY","BASE REPEAT","FAST ID","TREE MASKS","REUSE READY","DEMAND PLAN","PREP COMBINED","SDK WAITS","SDK NATIVE IO","SDK POLL64","SDK COMBINED","SDK AND PREP"};
@@ -68,6 +75,9 @@ internal sealed partial class ProbeScene
         if(!ProfilingSuite)return;
         long end=Clock.Timestamp;
         profile!.Current[FrameProfile.Yield]=(int)(end-yieldAt);
+#if HYPERCUBE_ONEMS
+        if(profileMeasured)execution.Record((int)(yieldAt-profileFrameAt),GpuProfiler.GpuWaitMicroseconds,GpuProfiler.RetraceWaitMicroseconds);
+#endif
         if(profileMeasured)
             profile.Record((int)(end-profileFrameAt),profileDemanded,profileSelected,profileStreamed,visibleCount,
                 (ProfileFlags&4)!=0?0:drawCount,(ProfileFlags&4)!=0?0:triangles);
@@ -84,7 +94,7 @@ internal sealed partial class ProbeScene
     private void ConfigureProfile()
     {
         GpuProfiler.UseNative2DRectangles=TextureFollowup&&(ProfileFlags&32)!=0;
-        GpuProfiler.OverlayGlyphs=TextureFollowup&&(ProfileFlags&32)!=0?OverlayGlyphMode.Rectangles:OverlayGlyphMode.Pixels;
+        GpuProfiler.OverlayGlyphs=OneMsSuite?OverlayGlyphMode.Atlas:TextureFollowup&&(ProfileFlags&32)!=0?OverlayGlyphMode.Rectangles:OverlayGlyphMode.Pixels;
         Dolphin.Diagnostics.GpuProfiler.ReuseFrameClear=TextureFollowup&&(ProfileFlags&64)!=0;
         if(FollowupSuite)
         {
@@ -113,6 +123,9 @@ internal sealed partial class ProbeScene
         Dolphin.Threading.Tasks.Scheduler.ResetWaitStats();
         Dolphin.Storage.AssetStream.ResetReadStats();
         profile!.Reset();profileMeasured=profileFinishPending=false;profileStored![scenario]=false;
+#if HYPERCUBE_ONEMS
+        execution.Reset();
+#endif
         streamer.Group=1;streamer.Format=6;streamer.ReadBatchBytes=32768;streamer.MaxBatchRecords=4;
         streamer.UseAram=streamer.InjectFaults=streamer.AdaptiveFallback=streamer.CoarseFirst=false;
         streamer.Policy.ValidateIdsOnly=OptimizeIds;
@@ -151,7 +164,7 @@ internal sealed partial class ProbeScene
             if(OptimizeReady?(selectedReadyMask&(1<<c))!=0:ReadyLevel(c,selectedLod[c],false))profileSelected++;
         }
     }
-    private int ProfileFlags=>FollowupSuite?followupFlags[scenario]:scenario==1?1:scenario==2?2:scenario==3?4:scenario==4?8:scenario==6?16:scenario==7?32:scenario==8?64:scenario==9?128:scenario==10?240:scenario==12?256:scenario==13?512:scenario==11?1024:scenario==14?1792:scenario==15?2032:0;
+    private int ProfileFlags=>OneMsSuite?24560:FollowupSuite?followupFlags[scenario]:scenario==1?1:scenario==2?2:scenario==3?4:scenario==4?8:scenario==6?16:scenario==7?32:scenario==8?64:scenario==9?128:scenario==10?240:scenario==12?256:scenario==13?512:scenario==11?1024:scenario==14?1792:scenario==15?2032:0;
     private void FillProfileTelemetry(int elapsed)
     {
         // Hold each page longer than the 500 ms capture interval, including
@@ -167,10 +180,13 @@ internal sealed partial class ProbeScene
     {
         var t=telemetry.Data;var p=profile!;
         for(int i=0;i<32;i++)t[i]=0;
-        t[0]=0x4843;t[1]=TextureFollowup?8:FollowupSuite?7:6;t[2]=frame;t[3]=scenario;t[4]=p.Frames.Samples;
+        t[0]=0x4843;t[1]=OneMsSuite?9:TextureFollowup?8:FollowupSuite?7:6;t[2]=frame;t[3]=scenario;t[4]=p.Frames.Samples;
         t[5]=streamer.Policy.BudgetBytes/1024;t[6]=streamer.PhysicalBytes/1024;t[7]=completedMask;t[8]=page;t[9]=ProfileFlags;
         t[10]=(int)(actorX*256);t[11]=(int)(actorZ*256);t[12]=voice.IsPlaying?1:0;t[13]=streamer.Failures;
         t[14]=p.SelectedPermille;t[15]=streamer.Cells.BlockedMoves;
+#if HYPERCUBE_ONEMS
+        if(page==4){t[16]=execution.Mean;t[17]=execution.P99;t[18]=execution.Maximum;t[19]=execution.Samples;t[20]=execution.GpuMean;t[21]=execution.ViMean;for(int i=0;i<7;i++)t[22+i]=execution.PrepMean(i);return;}
+#endif
         if(page==0)
         {
             t[16]=p.Frames.Percentile(50);t[17]=p.Frames.Percentile(95);t[18]=p.Frames.Percentile(99);t[19]=p.Frames.MeanUs/10;
