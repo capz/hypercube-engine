@@ -228,6 +228,19 @@ internal sealed partial class ProbeScene
     }
     private void ReportProfile()
     {
+#if HYPERCUBE_ONEMS
+        DebugOverlay.WriteLine("FOREGROUND EXECUTION - MICROSECONDS");
+        DebugOverlay.WriteLine("MEAN "+execution.Mean+" P99 "+execution.P99+" MAX "+execution.Maximum);
+        DebugOverlay.WriteLine("GPU WAIT "+execution.GpuMean+" VI WAIT "+execution.ViMean);
+        DebugOverlay.WriteLine("PREP "+profile!.Mean(FrameProfile.Prepare)+" DRAW "+profile.Mean(FrameProfile.Draw));
+        DebugOverlay.WriteLine("HUD "+profile.Mean(FrameProfile.Hud)+" STREAM "+profile.Mean(FrameProfile.Stream));
+        DebugOverlay.WriteLine("SELECTED "+profile.SelectedPermille/10+"% BLOCK "+streamer.Cells.BlockedMoves);
+        DebugOverlay.WriteLine("BUDGET "+streamer.Policy.BudgetBytes/1024+" KIB SAMPLES "+execution.Samples);
+        DebugOverlay.WriteLine("START:RERUN X:BUDGET+RERUN");
+        DebugOverlay.WriteLine("EXCLUDES GPU/VI BLOCKING AND EXPLICIT YIELD");
+        DebugOverlay.WriteLine("BACKGROUND WORK MAY OVERLAP WAITS");
+        return;
+#endif
         if(!summary)
         {
             var p=profile!;

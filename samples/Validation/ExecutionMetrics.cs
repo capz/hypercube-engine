@@ -20,5 +20,5 @@ internal sealed class ExecutionMetrics
     internal int Mean=>Samples==0?0:(int)(total/Samples);
     internal int GpuMean=>Samples==0?0:(int)(gpu/Samples);
     internal int ViMean=>Samples==0?0:(int)(vi/Samples);
-    internal int P99 {get{int target=(Samples*99+99)/100,n=0;for(int i=0;i<bins.Length;i++){n+=bins[i];if(n>=target)return i==bins.Length-1?Maximum:(i+1)*16;}return 0;}}
+    internal int P99 {get{if(Samples==0)return 0;int target=(Samples*99+99)/100,n=0;for(int i=0;i<bins.Length;i++){n+=bins[i];if(n>=target)return i==bins.Length-1?Maximum:(i+1)*16;}return 0;}}
 }
