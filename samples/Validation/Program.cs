@@ -59,7 +59,7 @@ internal sealed partial class ProbeScene : IDisposable
     private int CaseCount=>ProfilingSuite?ProfileCases:PerformanceSuite?PerformanceCases:11;
     private int Kind=>ProfilingSuite?1:PerformanceSuite?(scenario==7?7:scenario==8?8:1):scenario;
     private readonly string[] performanceNames={"BASE","ON DEMAND","SLICED","COARSE FIRST","COMPACT HUD","COMBINED","BASE REPEAT","OPT FAULTS","OPT PRESSURE"};
-    private string CaseName=>ProfilingSuite?profileNames[scenario]:PerformanceSuite?performanceNames[scenario]:names[scenario];
+    private string CaseName=>ProfilingSuite?(FollowupSuite?followupNames[scenario]:profileNames[scenario]):PerformanceSuite?performanceNames[scenario]:names[scenario];
     private readonly FrameMetrics frameMetrics=new FrameMetrics();
     private readonly int[,] performanceResults=new int[9,32];
     private int detailFrames;
@@ -198,15 +198,17 @@ internal sealed partial class ProbeScene : IDisposable
             distances[cell]=distance;
         }
         int selected=0,planCells=0;profileDemanded=0;
-        for(int pass=0;pass<24&&Kind<9;pass++)
+        int ordered=OptimizeDemand&&Kind<9?DemandOrder.Build(demandOrder,visible,distances):0;
+        for(int pass=0;pass<(OptimizeDemand?ordered:24)&&Kind<9;pass++)
         {
             int next=-1;
-            for(int c=0;c<24;c++)if(visible[c]&&(selected&(1<<c))==0&&
-                (next<0||distances[c]<distances[next]))next=c;
+            if(OptimizeDemand)next=demandOrder[pass];
+            else for(int c=0;c<24;c++)if(visible[c]&&(selected&(1<<c))==0&&
+                    (next<0||distances[c]<distances[next]))next=c;
             if(next<0||distances[next]>=12)break;
             selected|=1<<next;
             profileDemanded++;
-            if(!(ProfilingSuite&&scenario==1)&&!Occluded(OptimizeTree?world.Tree.Leaves[next]:world.Tree.Leaf(next)))
+            if(!(ProfilingSuite&&(ProfileFlags&1)!=0)&&!Occluded(OptimizeTree?world.Tree.Leaves[next]:world.Tree.Leaf(next)))
             {
                 if(OptimizeDemand)demandOrder[planCells++]=next;
                 else streamer.DemandCell(next,Kind==0?0:selectedLod[next],Kind==0);
@@ -281,7 +283,14 @@ internal sealed partial class ProbeScene : IDisposable
         // Cull and demand using the same camera pose that will render this frame.
         // Movement uses already-published collision; new collision publishes for
         // the following frame, avoiding a culling mismatch on teleports.
+        long prepPartAt=OneMsSuite?Clock.Timestamp:0;
+#if HYPERCUBE_ONEMS
+        execution.CurrentPrep[0]=(int)(prepPartAt-prepareAt);
+#endif
         VisibilityAndDemand(targetX,targetZ);
+#if HYPERCUBE_ONEMS
+        execution.CurrentPrep[1]=(int)(Clock.Timestamp-prepPartAt);
+#endif
         if(ProfilingSuite)profile!.Current[FrameProfile.Prepare]+=(int)(Clock.Timestamp-prepareAt);
         long pumpAt=ProfilingSuite?Clock.Timestamp:0,decodeBefore=world.DecodeUs,createBefore=world.CreateUs;
         if(requested<0&&!stopped)streamer.Pump();
@@ -291,6 +300,9 @@ internal sealed partial class ProbeScene : IDisposable
         if(device.NativeBytes!=baseline+streamer.PhysicalBytes||streamer.PhysicalBytes>streamer.Policy.BudgetBytes)
             throw new InvalidOperationException("Native resource accounting or dynamic budget failed.");
         if(!voice.IsPlaying)throw new InvalidOperationException("Audio voice stopped during streaming.");
+#if HYPERCUBE_ONEMS
+        execution.CurrentPrep[2]=(int)(Clock.Timestamp-prepareAt);prepPartAt=Clock.Timestamp;
+#endif
         detailMask=selectedReadyMask=0;
         for(int c=0;c<24;c++)
         {
@@ -303,6 +315,9 @@ internal sealed partial class ProbeScene : IDisposable
                     break;
                 }
         }
+#if HYPERCUBE_ONEMS
+        execution.CurrentPrep[3]=(int)(Clock.Timestamp-prepPartAt);prepPartAt=Clock.Timestamp;
+#endif
         drawCount=triangles=fallbacks=occluded=bindings=0;lastTexture=-1;Traverse(0);
         for(int i=1;i<drawCount;i++)
         {
@@ -310,12 +325,21 @@ internal sealed partial class ProbeScene : IDisposable
             while(j>0&&drawTextures[j-1]>texture){drawIds[j]=drawIds[j-1];drawTextures[j]=drawTextures[j-1];j--;}
             drawIds[j]=id;drawTextures[j]=texture;
         }
+#if HYPERCUBE_ONEMS
+        execution.CurrentPrep[4]=(int)(Clock.Timestamp-prepPartAt);prepPartAt=Clock.Timestamp;
+#endif
         camera.LookAt(new Vector3(focusX,12,focusZ+16),new Vector3(focusX,0,focusZ),new Vector3(0,1,0));
+#if HYPERCUBE_ONEMS
+        execution.CurrentPrep[5]=(int)(Clock.Timestamp-prepPartAt);prepPartAt=Clock.Timestamp;
+#endif
         if(ProfilingSuite)
         {
             profile!.Current[FrameProfile.Prepare]+=(int)(Clock.Timestamp-prepareAt);
             CountProfileDetail();
         }
+#if HYPERCUBE_ONEMS
+        execution.CurrentPrep[6]=(int)(Clock.Timestamp-prepPartAt);
+#endif
         long drawAt=ProfilingSuite?Clock.Timestamp:0;
         device.BeginFrame(new Color32(8,10,19));renderer.Begin3D(camera);
         for(int i=0;i<drawCount;i++)
@@ -326,7 +350,7 @@ internal sealed partial class ProbeScene : IDisposable
             if(material.Texture==null)throw new InvalidOperationException("Drawing an unpublished texture.");
             int tint=r.Kind==4?r.Variant:r.Material;
             material.Color=tint%3==0?Color32.White:tint%3==1?new Color32(230,255,255):new Color32(255,230,255);
-            if(!(ProfilingSuite&&scenario==3))renderer.DrawMesh(id<0?world.Patches[-id]!:streamer.Geometry(id)!,material,identity);
+            if(!(ProfilingSuite&&(ProfileFlags&4)!=0))renderer.DrawMesh(id<0?world.Patches[-id]!:streamer.Geometry(id)!,material,identity);
             triangles+=id<0?world.TriangleCounts[-id]:streamer.Triangles(id);
             if(id>0){streamer.Pin(id);streamer.Pin(texture);}
             // Payload index count is stable; metrics use native geometry bytes

@@ -9,6 +9,7 @@ namespace Hypercube.GameCube;
 
 public sealed class WorldStreamer : IDisposable
 {
+    private const int ResourceCapacity=128;
     public readonly ResourceScheduler Policy;
     public readonly TexturePool Textures=new TexturePool();
     public readonly AramCache Cold;
@@ -17,10 +18,10 @@ public sealed class WorldStreamer : IDisposable
     private readonly PackedWorld world;
     private readonly AssetStream stream;
     private readonly NativeBuffer staging=NativeBuffer.Allocate(131072);
-    private readonly Mesh?[] meshes=new Mesh?[64];
-    private readonly NativeBuffer?[] collisionBuffers=new NativeBuffer?[64];
-    private readonly int[] textureSlots=new int[64],owned=new int[64];
-    private readonly int[] triangleCounts=new int[64];
+    private readonly Mesh?[] meshes=new Mesh?[ResourceCapacity];
+    private readonly NativeBuffer?[] collisionBuffers=new NativeBuffer?[ResourceCapacity];
+    private readonly int[] textureSlots=new int[ResourceCapacity],owned=new int[ResourceCapacity];
+    private readonly int[] triangleCounts=new int[ResourceCapacity];
     private readonly float[] heights=new float[216];
     private readonly int[] heightMasks=new int[24];
     private readonly int[] batch=new int[8],tags=new int[8],batchIds=new int[8];
@@ -50,9 +51,9 @@ public sealed class WorldStreamer : IDisposable
     public WorldStreamer(PackedWorld world,string path,int budgetBytes=384*1024)
     {
         this.world=world;scratch=world.Scratch;catalog=world.Catalog;stream=world.Assets;
-        Policy=new ResourceScheduler(catalog,64,budgetBytes);
+        Policy=new ResourceScheduler(catalog,ResourceCapacity,budgetBytes);
         Cold=new AramCache(catalog.Count,256*1024);
-        for(int i=0;i<64;i++)textureSlots[i]=-1;
+        for(int i=0;i<textureSlots.Length;i++)textureSlots[i]=-1;
         for(int i=0;i<24;i++)if(world.HasCell(i))Cells.CoarseReady(i);
     }
     public void BeginDemand()=>Policy.BeginDemand();
@@ -320,7 +321,7 @@ public sealed class WorldStreamer : IDisposable
     public void Dispose()
     {
         if(count!=0)throw new InvalidOperationException("Drain streaming work before disposal.");
-        for(int i=0;i<64;i++){meshes[i]?.Dispose();collisionBuffers[i]?.Dispose();}
+        for(int i=0;i<meshes.Length;i++){meshes[i]?.Dispose();collisionBuffers[i]?.Dispose();}
         Textures.Dispose();Cold.Dispose();staging.Dispose();otherBytes=0;
     }
 }

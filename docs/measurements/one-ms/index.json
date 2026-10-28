@@ -1,0 +1,332 @@
+[
+  {
+    "variant": "aggregate-access",
+    "execution": {
+      "meanUs": 1838,
+      "p99Us": 4160,
+      "maxUs": 4890,
+      "samples": 541,
+      "gpuMeanUs": 28,
+      "viMeanUs": 13643,
+      "prepMeanUs": {
+        "movement": 4,
+        "visibilityDemand": 390,
+        "guards": 1,
+        "resolve": 124,
+        "traverseSort": 190,
+        "camera": 4,
+        "detailAccounting": 14
+      }
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 405,
+    "blocked": 73,
+    "trianglesMean": 2655
+  },
+  {
+    "variant": "atlas",
+    "execution": {
+      "meanUs": 9109,
+      "p99Us": 13248,
+      "maxUs": 14609,
+      "samples": 540,
+      "gpuMeanUs": 28,
+      "viMeanUs": 6346
+    },
+    "frameMeanUs": 16650,
+    "selectedPermille": 306,
+    "blocked": 177,
+    "trianglesMean": 2543
+  },
+  {
+    "variant": "baseline",
+    "execution": {
+      "meanUs": 12290,
+      "p99Us": 16272,
+      "maxUs": 17889,
+      "samples": 522,
+      "gpuMeanUs": 31,
+      "viMeanUs": 3769
+    },
+    "frameMeanUs": 17260,
+    "selectedPermille": 316,
+    "blocked": 186,
+    "trianglesMean": 2553
+  },
+  {
+    "variant": "bounded-graph",
+    "execution": {
+      "meanUs": 3810,
+      "p99Us": 6544,
+      "maxUs": 8846,
+      "samples": 540,
+      "gpuMeanUs": 28,
+      "viMeanUs": 11670
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 327,
+    "blocked": 177,
+    "trianglesMean": 2566
+  },
+  {
+    "variant": "bounded-leaf",
+    "execution": {
+      "meanUs": 3868,
+      "p99Us": 6672,
+      "maxUs": 7456,
+      "samples": 540,
+      "gpuMeanUs": 28,
+      "viMeanUs": 11612
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 334,
+    "blocked": 178,
+    "trianglesMean": 2576
+  },
+  {
+    "variant": "cached-catalog",
+    "execution": {
+      "meanUs": 6844,
+      "p99Us": 10048,
+      "maxUs": 10533,
+      "samples": 540,
+      "gpuMeanUs": 28,
+      "viMeanUs": 8633
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 327,
+    "blocked": 196,
+    "trianglesMean": 2569
+  },
+  {
+    "variant": "cached-pipeline",
+    "execution": {
+      "meanUs": 2390,
+      "p99Us": 4416,
+      "maxUs": 5782,
+      "samples": 540,
+      "gpuMeanUs": 28,
+      "viMeanUs": 13095
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 312,
+    "blocked": 194,
+    "trianglesMean": 2557
+  },
+  {
+    "variant": "crc-prep-probes",
+    "execution": {
+      "meanUs": 2334,
+      "p99Us": 4096,
+      "maxUs": 5847,
+      "samples": 540,
+      "gpuMeanUs": 28,
+      "viMeanUs": 13147,
+      "prepMeanUs": {
+        "movement": 4,
+        "visibilityDemand": 935,
+        "guards": 1,
+        "resolve": 145,
+        "traverseSort": 198,
+        "camera": 4,
+        "detailAccounting": 14
+      }
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 312,
+    "blocked": 195,
+    "trianglesMean": 2557
+  },
+  {
+    "variant": "fast-runtime",
+    "execution": {
+      "meanUs": 3086,
+      "p99Us": 5344,
+      "maxUs": 6434,
+      "samples": 540,
+      "gpuMeanUs": 28,
+      "viMeanUs": 12398
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 321,
+    "blocked": 200,
+    "trianglesMean": 2570
+  },
+  {
+    "variant": "free-slots",
+    "execution": {
+      "meanUs": 2816,
+      "p99Us": 4864,
+      "maxUs": 6082,
+      "samples": 540,
+      "gpuMeanUs": 28,
+      "viMeanUs": 12668
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 313,
+    "blocked": 205,
+    "trianglesMean": 2554
+  },
+  {
+    "variant": "indexed-gx",
+    "execution": {
+      "meanUs": 4403,
+      "p99Us": 7280,
+      "maxUs": 9105,
+      "samples": 540,
+      "gpuMeanUs": 28,
+      "viMeanUs": 11074
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 334,
+    "blocked": 184,
+    "trianglesMean": 2575
+  },
+  {
+    "variant": "inline-hotpaths",
+    "execution": {
+      "meanUs": 2236,
+      "p99Us": 3888,
+      "maxUs": 5806,
+      "samples": 541,
+      "gpuMeanUs": 28,
+      "viMeanUs": 13249,
+      "prepMeanUs": {
+        "movement": 3,
+        "visibilityDemand": 921,
+        "guards": 1,
+        "resolve": 125,
+        "traverseSort": 170,
+        "camera": 4,
+        "detailAccounting": 14
+      }
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 324,
+    "blocked": 204,
+    "trianglesMean": 2568
+  },
+  {
+    "variant": "inline-poll",
+    "execution": {
+      "meanUs": 12585,
+      "p99Us": 16976,
+      "maxUs": 20888,
+      "samples": 511,
+      "gpuMeanUs": 25,
+      "viMeanUs": 3818
+    },
+    "frameMeanUs": 17600,
+    "selectedPermille": 299,
+    "blocked": 185,
+    "trianglesMean": 2527
+  },
+  {
+    "variant": "lto-atlas",
+    "execution": {
+      "meanUs": 7548,
+      "p99Us": 10992,
+      "maxUs": 15237,
+      "samples": 541,
+      "gpuMeanUs": 28,
+      "viMeanUs": 7904
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 320,
+    "blocked": 189,
+    "trianglesMean": 2558
+  },
+  {
+    "variant": "lto-atlas-batch",
+    "execution": {
+      "meanUs": 7641,
+      "p99Us": 11104,
+      "maxUs": 15616,
+      "samples": 540,
+      "gpuMeanUs": 28,
+      "viMeanUs": 7846
+    },
+    "frameMeanUs": 16690,
+    "selectedPermille": 320,
+    "blocked": 189,
+    "trianglesMean": 2558
+  },
+  {
+    "variant": "native-handoff",
+    "execution": {
+      "meanUs": 2388,
+      "p99Us": 4256,
+      "maxUs": 5850,
+      "samples": 540,
+      "gpuMeanUs": 28,
+      "viMeanUs": 13097
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 315,
+    "blocked": 203,
+    "trianglesMean": 2561
+  },
+  {
+    "variant": "root-aliases",
+    "execution": {
+      "meanUs": 2383,
+      "p99Us": 4528,
+      "maxUs": 5842,
+      "samples": 540,
+      "gpuMeanUs": 28,
+      "viMeanUs": 13102
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 312,
+    "blocked": 195,
+    "trianglesMean": 2556
+  },
+  {
+    "variant": "slots128",
+    "execution": {
+      "meanUs": 1837,
+      "p99Us": 4160,
+      "maxUs": 4888,
+      "samples": 541,
+      "gpuMeanUs": 28,
+      "viMeanUs": 13644,
+      "prepMeanUs": {
+        "movement": 4,
+        "visibilityDemand": 390,
+        "guards": 1,
+        "resolve": 124,
+        "traverseSort": 190,
+        "camera": 4,
+        "detailAccounting": 14
+      }
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 405,
+    "blocked": 73,
+    "trianglesMean": 2655
+  },
+  {
+    "variant": "final-ui",
+    "execution": {
+      "meanUs": 1821,
+      "p99Us": 3184,
+      "maxUs": 4495,
+      "samples": 541,
+      "gpuMeanUs": 25,
+      "viMeanUs": 13664,
+      "prepMeanUs": {
+        "movement": 4,
+        "visibilityDemand": 390,
+        "guards": 1,
+        "resolve": 124,
+        "traverseSort": 190,
+        "camera": 4,
+        "detailAccounting": 14
+      }
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 405,
+    "blocked": 73,
+    "trianglesMean": 2655
+  }
+]
