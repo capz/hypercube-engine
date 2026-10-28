@@ -59,7 +59,7 @@ internal sealed partial class ProbeScene : IDisposable
     private int CaseCount=>ProfilingSuite?ProfileCases:PerformanceSuite?PerformanceCases:11;
     private int Kind=>ProfilingSuite?1:PerformanceSuite?(scenario==7?7:scenario==8?8:1):scenario;
     private readonly string[] performanceNames={"BASE","ON DEMAND","SLICED","COARSE FIRST","COMPACT HUD","COMBINED","BASE REPEAT","OPT FAULTS","OPT PRESSURE"};
-    private string CaseName=>ProfilingSuite?profileNames[scenario]:PerformanceSuite?performanceNames[scenario]:names[scenario];
+    private string CaseName=>ProfilingSuite?(FollowupSuite?followupNames[scenario]:profileNames[scenario]):PerformanceSuite?performanceNames[scenario]:names[scenario];
     private readonly FrameMetrics frameMetrics=new FrameMetrics();
     private readonly int[,] performanceResults=new int[9,32];
     private int detailFrames;
@@ -206,7 +206,7 @@ internal sealed partial class ProbeScene : IDisposable
             if(next<0||distances[next]>=12)break;
             selected|=1<<next;
             profileDemanded++;
-            if(!(ProfilingSuite&&scenario==1)&&!Occluded(OptimizeTree?world.Tree.Leaves[next]:world.Tree.Leaf(next)))
+            if(!(ProfilingSuite&&(ProfileFlags&1)!=0)&&!Occluded(OptimizeTree?world.Tree.Leaves[next]:world.Tree.Leaf(next)))
             {
                 if(OptimizeDemand)demandOrder[planCells++]=next;
                 else streamer.DemandCell(next,Kind==0?0:selectedLod[next],Kind==0);
@@ -326,7 +326,7 @@ internal sealed partial class ProbeScene : IDisposable
             if(material.Texture==null)throw new InvalidOperationException("Drawing an unpublished texture.");
             int tint=r.Kind==4?r.Variant:r.Material;
             material.Color=tint%3==0?Color32.White:tint%3==1?new Color32(230,255,255):new Color32(255,230,255);
-            if(!(ProfilingSuite&&scenario==3))renderer.DrawMesh(id<0?world.Patches[-id]!:streamer.Geometry(id)!,material,identity);
+            if(!(ProfilingSuite&&(ProfileFlags&4)!=0))renderer.DrawMesh(id<0?world.Patches[-id]!:streamer.Geometry(id)!,material,identity);
             triangles+=id<0?world.TriangleCounts[-id]:streamer.Triangles(id);
             if(id>0){streamer.Pin(id);streamer.Pin(texture);}
             // Payload index count is stable; metrics use native geometry bytes
