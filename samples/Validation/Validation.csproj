@@ -4,6 +4,7 @@
   <Import Project="$(DolphinDotNetRoot)/sdk/DolphinDotNet.Sdk/Sdk/Sdk.props" />
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <DefineConstants Condition="'$(HypercubeTextureFollowup)' == 'true'">$(DefineConstants);HYPERCUBE_TEXTURE_FOLLOWUP;HYPERCUBE_FOLLOWUP;HYPERCUBE_PROFILING</DefineConstants>
     <DefineConstants Condition="'$(HypercubeFollowup)' == 'true'">$(DefineConstants);HYPERCUBE_FOLLOWUP;HYPERCUBE_PROFILING</DefineConstants>
     <DefineConstants Condition="'$(HypercubeProfiling)' == 'true'">$(DefineConstants);HYPERCUBE_PROFILING</DefineConstants>
     <DefineConstants Condition="'$(HypercubeCI)' == 'true'">$(DefineConstants);HYPERCUBE_CI</DefineConstants>
