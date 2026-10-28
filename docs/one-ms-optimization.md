@@ -17,8 +17,9 @@ The tested baseline is SDK `1c77976` plus engine `326d4f1` (the previous texture
 | Cached console commands and rendering state | 2.390 |
 | CRC table and hot-path inlining | 2.236 |
 | 128 planning slots, 48 texture descriptors | 1.837 |
+| Final build with execution overlay | 1.821 |
 
-The final row increases planning metadata, while retaining the 384 KiB physical streaming budget. Selected detail improved from approximately 32% to 40.5%, and blocked moves decreased from 186 to 73. Its P99 foreground window is 4.160 ms; displayed frame intervals remain approximately 16.7 ms. **The 1 ms target is not achieved.**
+The planning-capacity change increases metadata, while retaining the 384 KiB physical streaming budget. Selected detail improved from approximately 32% to 40.5%, and blocked moves decreased from 186 to 73. The final build repeated this result at 1.821 ms mean and 3.184 ms P99 (541 samples); displayed frame intervals remain approximately 16.7 ms. **The 1 ms target is not achieved.**
 
 These are foreground wall-time windows excluding measured GX/VI blocking and the explicit yield. They include managed-gate contention but exclude background work overlapping waits; they are not total CPU-cycle or full GPU timing measurements. Profiling bookkeeping after the window is also outside this metric. Compare quality, work and budget alongside timing.
 

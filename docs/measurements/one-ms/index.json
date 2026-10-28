@@ -304,5 +304,29 @@
     "selectedPermille": 405,
     "blocked": 73,
     "trianglesMean": 2655
+  },
+  {
+    "variant": "final-ui",
+    "execution": {
+      "meanUs": 1821,
+      "p99Us": 3184,
+      "maxUs": 4495,
+      "samples": 541,
+      "gpuMeanUs": 25,
+      "viMeanUs": 13664,
+      "prepMeanUs": {
+        "movement": 4,
+        "visibilityDemand": 390,
+        "guards": 1,
+        "resolve": 124,
+        "traverseSort": 190,
+        "camera": 4,
+        "detailAccounting": 14
+      }
+    },
+    "frameMeanUs": 16660,
+    "selectedPermille": 405,
+    "blocked": 73,
+    "trianglesMean": 2655
   }
 ]
