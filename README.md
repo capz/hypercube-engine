@@ -87,3 +87,10 @@ layers, configurable camera culling, shared graphics-resource leases and unified
 rendering counters are documented in [shared rendering services](docs/shared-rendering.md).
 `tools/build_rendering.sh` builds the standalone Rendering integration DOL; its
 Dolphin validator exercises all six areas without requiring the streaming data ISO.
+
+## NuGet packages
+
+NuGet packaging and trusted publication are described in [NuGet distribution](docs/nuget.md).
+The package IDs are `Capz.Hypercube.Core` and `Capz.Hypercube.GameCube`; C#
+namespaces remain unchanged. Hypercube is licensed under GPL-2.0-only, matching
+DolphinDotNet. GameCube package builds require a compatible published SDK package.

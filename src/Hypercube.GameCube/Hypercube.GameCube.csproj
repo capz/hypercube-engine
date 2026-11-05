@@ -1,6 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../eng/Package.props" />
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Capz.Hypercube.GameCube</PackageId>
+    <Description>GameCube rendering, shared materials, GPU resource ownership and streaming adapters for Hypercube on DolphinDotNet.</Description>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Hypercube.Core/Hypercube.Core.csproj" />
-    <ProjectReference Include="$(DolphinDotNetRoot)/src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
+    <ProjectReference Include="$(DolphinDotNetRoot)/src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" Condition="'$(HypercubeUsePublishedSdk)' != 'true'" />
+    <PackageReference Include="DolphinDotNet.GameCube" Version="[$(DolphinDotNetPackageVersion)]" Condition="'$(HypercubeUsePublishedSdk)' == 'true'" />
   </ItemGroup>
+  <Target Name="ValidatePackageSdkDependency" BeforeTargets="GenerateNuspec" Condition="'$(IsPackable)' == 'true'">
+    <Error Condition="'$(HypercubeUsePublishedSdk)' != 'true'" Text="Use eng/pack.py to pack against a published DolphinDotNet dependency rather than a source-checkout project reference." />
+  </Target>
 </Project>
