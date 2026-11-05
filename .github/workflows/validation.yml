@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: capz/DolphinDotNet
-          ref: 4728b40a00f389b06ea2482e84c244b8b1d0570e
+          ref: b8156941fe3be01546be58f37ca6c758d43de825
           path: vendor/sdk
       - uses: actions/setup-dotnet@v4
         with:
@@ -41,6 +41,16 @@ jobs:
           vendor/sdk/tests/native_buffer_crc_test
       - name: Build Dolphin validation container
         run: docker build -t hypercube-dolphin -f tools/Dockerfile.dolphin .
+      - name: Build shared rendering integration sample
+        env:
+          CONFIGURATION: ${{ matrix.configuration }}
+        run: tools/build_rendering.sh
+      - name: Validate bounded rendering, dirty uploads and cover states in Dolphin
+        run: >-
+          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
+          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
+          python3 tools/rendering_validation.py out/native-rendering-${{ matrix.configuration }}/Game.dol
+          --logs out/dolphin-rendering-${{ matrix.configuration }} --seconds 35
       - name: Boot the DOL and run all eleven scene comparisons
         run: >-
           docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"

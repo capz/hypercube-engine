@@ -6,6 +6,7 @@ static void Reject(Action action, string label)
     try { action(); } catch (IOException) { return; }
     throw new Exception("Did not reject: " + label);
 }
+RenderingChecks.Run();
 byte[] raw = File.ReadAllBytes(args.Length == 0 ? "out/assets/world.hcp" : args[0]);
 var header = raw[..32];
 int count = Binary.I32(header, 8);

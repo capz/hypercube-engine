@@ -5,6 +5,7 @@ namespace Hypercube;
 public sealed class FrameProfile
 {
     public const int Stream=0, Decode=1, Create=2, Draw=3, Present=4, Yield=5, Hud=6, Prepare=7, Other=8;
+    public readonly RenderCounters Rendering=new RenderCounters();
     public readonly FrameMetrics Frames=new FrameMetrics();
     public readonly int[] Current=new int[8];
     private readonly long[] totals=new long[9],quality=new long[6];
@@ -18,7 +19,7 @@ public sealed class FrameProfile
     public int SelectedPermille=>quality[0]==0?0:(int)(quality[1]*1000/quality[0]);
     public void Reset()
     {
-        Frames.Reset();DetailFrames=0;TotalUs=0;
+        Rendering.Reset();Frames.Reset();DetailFrames=0;TotalUs=0;
         for(int i=0;i<9;i++){totals[i]=0;maxima[i]=0;if(i<8)Current[i]=0;}
         for(int i=0;i<6;i++)quality[i]=0;
     }

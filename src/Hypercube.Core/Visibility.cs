@@ -6,18 +6,9 @@ public static class Visibility
 {
     private const float Tan=.52056705f,TanX=Tan*4/3;
     private static float Abs(float x)=>x<0?-x:x;
+    private static readonly CameraFrustum validationCamera=new CameraFrustum(0,12,16,0,0,0,0,1,0,55,4f/3,.1f,80);
     public static bool Frustum(float x0,float y0,float z0,float x1,float y1,float z1,float focusX,float focusZ)
-    {
-        float x=(x0+x1)*.5f-focusX,y=(y0+y1)*.5f-12,z=(z0+z1)*.5f-focusZ-16;
-        float hx=(x1-x0)*.5f,hy=(y1-y0)*.5f,hz=(z1-z0)*.5f;
-        float depth=-.6f*y-.8f*z,up=.8f*y-.6f*z;
-        float sideRadius=hx+.6f*TanX*hy+.8f*TanX*hz;
-        if(depth*TanX-x < -sideRadius||depth*TanX+x < -sideRadius)return false;
-        float topRadius=Abs(-.6f*Tan-.8f)*hy+Abs(-.8f*Tan+.6f)*hz;
-        float bottomRadius=Abs(-.6f*Tan+.8f)*hy+Abs(-.8f*Tan-.6f)*hz;
-        return depth*Tan-up>=-topRadius&&depth*Tan+up>=-bottomRadius&&
-               depth+.6f*hy+.8f*hz>=.1f&&depth-.6f*hy-.8f*hz<=80;
-    }
+        =>validationCamera.Box(x0-focusX,y0,z0-focusZ,x1-focusX,y1,z1-focusZ);
     public static bool Occluded(float x0,float y0,float z0,float x1,float y1,float z1,float focusX,float focusZ,
                                 float ox0,float oy0,float oz,float ox1,float oy1)
     {
