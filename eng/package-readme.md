@@ -14,7 +14,7 @@ dotnet add package Capz.Hypercube.GameCube --prerelease
 ```
 
 GameCube depends on Core and DolphinDotNet.GameCube. Use a GameCube application
-with `DolphinDotNet.Sdk/0.1.0-preview.217.1` and a matching
+with `DolphinDotNet.Sdk/0.1.0-preview.245.1` and a matching
 `DolphinDotNet.GameCube` package. These engine packages contain managed libraries
 and PDBs, not the native compiler or a replacement SDK. Build the application with
 the DolphinDotNet SDK to produce a GameCube DOL. Do not execute graphics adapters

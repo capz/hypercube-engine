@@ -34,9 +34,11 @@ needed to consume the packages.
 The NuGet preview workflow verifies packages and native consumption before an
 upload. PRs only verify. Explicit `nuget-preview-*` tags request preview
 publication, including before the packaging PR is merged; manual publish=true
-is restricted to main. Versions are `0.1.0-preview.RUN.ATTEMPT`, so retries do not
-reuse immutable NuGet versions. Both packages from a run share the version.
+is restricted to main. Versions are `0.1.0-preview.RUN.ATTEMPT`; rerunning
+verification produces a new version. Both packages from a run share the version.
 The publishing job downloads the exact verified artifacts rather than rebuilding.
+Retrying only publication reuses those artifacts and skips existing versions,
+so a partial upload can resume without failing on the first package again.
 
 Trusted publishing needs a policy on NuGet.org for account **capz**:
 
