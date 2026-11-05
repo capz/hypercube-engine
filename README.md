@@ -79,3 +79,11 @@ Read [the implementation and decision gates](docs/streaming-validation.md), [ren
 The next SDK iteration has a separate [wait/read follow-up suite](docs/sdk-followup.md): `SDK_FOLLOWUP_SUITE=1 tools/build_validation.sh`, then `--suite sdk-followup` in the validator. It compares completion checks, deadline hints and aligned 16/32/64 KiB native reads with four-page protocol-v7 diagnostics.
 
 The next SDK iteration has a separate texture-throughput profile: `TEXTURE_FOLLOWUP_SUITE=1 tools/build_validation.sh`, then `--suite texture-followup` in the validator. [Texture pipeline results](docs/texture-pipeline-results.md) cover SDK 2D submission, frame-start clear reuse, task-completion/timer behavior and aligned reads with protocol-v8 diagnostics. Earlier v6/v7 result sets remain unchanged.
+
+## Shared rendering services
+
+Bounded opaque batches, reusable dynamic mesh buffers, scrolling/cloud material
+layers, configurable camera culling, shared graphics-resource leases and unified
+rendering counters are documented in [shared rendering services](docs/shared-rendering.md).
+`tools/build_rendering.sh` builds the standalone Rendering integration DOL; its
+Dolphin validator exercises all six areas without requiring the streaming data ISO.
