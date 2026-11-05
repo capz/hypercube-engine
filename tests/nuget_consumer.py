@@ -43,6 +43,17 @@ class Program {static void Main(){var q=new OpaqueDrawQueue(2);q.TryAdd(1,2,0xff
         assets=json.loads((app/'obj/project.assets.json').read_text())
         for identity in ['Capz.Hypercube.Core','Capz.Hypercube.GameCube','DolphinDotNet.GameCube','DolphinDotNet.Core']:
             if not any(k.startswith(identity+'/') for k in assets['libraries']):raise AssertionError('Missing transitive dependency '+identity)
+        # Source validation and distributed native/compiler assemblies must use
+        # the same reviewed SDK revision, not just compatible managed API names.
+        sdk_revision=(ROOT/'.sdk-revision').read_text().strip()
+        for identity in ['DolphinDotNet.Core','DolphinDotNet.GameCube','DolphinDotNet.Sdk']:
+            package=work/'packages'/identity.lower()/sdk
+            nuspec=ET.parse(package/(identity.lower()+'.nuspec'))
+            repository=next(e for e in nuspec.iter() if e.tag.split('}')[-1]=='repository')
+            if repository.get('commit')!=sdk_revision:
+                raise AssertionError('SDK source revision mismatch for '+identity+': '+str(repository.get('commit')))
+            if identity!='DolphinDotNet.Sdk' and identity+'/'+sdk not in assets['libraries']:
+                raise AssertionError('SDK dependency version mismatch for '+identity)
         compiler=work/'packages/dolphindotnet.sdk'/sdk/'tools/compiler/DolphinDotNet.Compiler.dll'
         run('dotnet',str(compiler),'--bundle',str(app/'bin/Release/net8.0/GameCube.dll'),str(work/'native-consumer'))
         if not (work/'native-consumer/source/generated_program.c').is_file():raise AssertionError('No consumer AOT bundle')

@@ -24,8 +24,9 @@ license/readme/PDB contents and dependency metadata, and emits packages.json wit
 the source commit. It fails on an accidental source-checkout SDK dependency.
 The consumer relocates the nupkgs, uses an isolated NuGet cache outside the
 repository, executes Core, then builds the Rendering sample through PackageReference
-and the published DolphinDotNet SDK. It verifies transitive dependencies, AOT
-bundling and, with --native, actual DOL/ELF output. No SDK source checkout is
+and the published DolphinDotNet SDK. It verifies transitive dependencies, confirms the SDK packages match the reviewed
+source revision in `.sdk-revision`, and checks AOT bundling and, with --native,
+actual DOL/ELF output. No SDK source checkout is
 needed to consume the packages.
 
 ## Publish
