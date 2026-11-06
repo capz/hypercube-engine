@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../src/Hypercube.Core/Hypercube.Core.csproj" />
+    <Compile Include="../../src/Hypercube.GameCube/IndexedMeshCache.cs" Link="IndexedMeshCache.cs" />
+  </ItemGroup>
+</Project>

@@ -7,7 +7,7 @@ using Hypercube.GameCube;
 
 internal static class Program
 {
-    private static VertexPositionColorTexture V(float x,float z)=>new VertexPositionColorTexture(new Vector3(x,0,z),Color32.White,new Vector2(x*.5f,z*.5f));
+    private static VertexPositionNormalColorTexture V(float x,float z)=>new VertexPositionNormalColorTexture(new Vector3(x,0,z),new Vector3(0,1,0),Color32.White,new Vector2(x*.5f,z*.5f));
     private static Mesh Marker()
     {
         var p=new[]{new Vector3(-.4f,0,-.4f),new Vector3(.4f,0,-.4f),new Vector3(.4f,0,.4f),new Vector3(-.4f,0,.4f),new Vector3(0,1.5f,0)};
@@ -25,12 +25,15 @@ internal static class Program
         var groundMaterial=new Material{Texture=owner.Texture(textureLease),Cull=CullMode.None};
         CloudShadowLayer.Configure(groundMaterial,new SamplerState(TextureAddressMode.Repeat,TextureAddressMode.Repeat,TextureFilter.Linear));
         using var clouds=new CloudShadowLayer(2,32,new Vector2(.4f,.2f));
-        using var ground=new DynamicMeshBuffer(3072);var vertices=ground.Reserve(1536,counters);int at=0;
-        for(int z=-8;z<8;z++)for(int x=-8;x<8;x++){
-            vertices[at++]=V(x,z);vertices[at++]=V(x+1,z+1);vertices[at++]=V(x+1,z);vertices[at++]=V(x,z);vertices[at++]=V(x,z+1);vertices[at++]=V(x+1,z+1);
+        using var ground=new IndexedMeshCache();
+        var vertices=new VertexPositionNormalColorTexture[17*17];var indices=new ushort[16*16*6];int at=0;
+        for(int z=0;z<=16;z++)for(int x=0;x<=16;x++)vertices[z*17+x]=V(x-8,z-8);
+        for(int z=0;z<16;z++)for(int x=0;x<16;x++){
+            int i=z*17+x;indices[at++]=(ushort)i;indices[at++]=(ushort)(i+18);indices[at++]=(ushort)(i+1);
+            indices[at++]=(ushort)i;indices[at++]=(ushort)(i+17);indices[at++]=(ushort)(i+18);
         }
         int trackedBytes=owner.TrackedBytes;
-        int uploads=ground.Commit(at,1,counters)?1:0;
+        int uploads=ground.Commit(vertices,vertices.Length,indices,at,1,counters)?1:0;
         using var marker=Marker();var batch=new MeshBatch(32,1,1);var renderer=new Renderer(device,batch.Capacity);var identity=new Transform();var ui=new Draw2D(device);var data=new int[32];
         int mesh=batch.RegisterMesh(marker),material=batch.RegisterMaterial(new Material{Effect=owner.Effect(effectLease),Cull=CullMode.None});
         var frustum=new CameraFrustum(4,10,16,0,0,0,0,1,0,55,4f/3,.1f,80);var camera=new Camera(55,4f/3,.1f,80);camera.LookAt(new Vector3(4,10,16),Vector3.Zero,new Vector3(0,1,0));
@@ -38,8 +41,8 @@ internal static class Program
         while(true){
             Controller.Update();if(Controller.GetState(0).B.WasPressed)break;
             long frameAt=Clock.Timestamp;frame++;counters.Reset();for(int i=0;i<8;i++)profile.Current[i]=0;
-            if(frame==120)vertices[0]=new VertexPositionColorTexture(vertices[0].Position,new Color32(225,255,225),vertices[0].TextureCoordinate);
-            if(ground.Commit(at,frame<120?1:2,counters))uploads++;
+            if(frame==120)vertices[0]=new VertexPositionNormalColorTexture(vertices[0].Position,new Vector3(0,1,0),new Color32(225,255,225),vertices[0].TextureCoordinate);
+            if(ground.Commit(vertices,vertices.Length,indices,at,frame<120?1:2,counters))uploads++;
             if(uploads!=(frame<120?1:2))throw new InvalidOperationException("Dirty geometry uploaded more than once");
             int phase=(frame/180)%3;clouds.Cover=phase==0?.5f:phase==1?0:1;clouds.Animate((Clock.Timestamp-start)/1000000.0);clouds.Apply(groundMaterial,new Color32(140,190,110));
             for(int z=-6;z<=6;z+=4)for(int x=-6;x<=6;x+=4){
