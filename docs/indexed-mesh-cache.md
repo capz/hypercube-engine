@@ -30,3 +30,14 @@ failed creation and disposal. It is run by `tools/build_validation.sh`. Existing
 asset/scheduler/rendering core checks pass. The actual Rendering DOL is compiled
 and linked with the source SDK, with native telemetry validating geometry,
 material groups, cloud states, bounded allocations and dirty upload counts.
+
+The completed native run passes the strict rendering validator: 327 decoded
+telemetry samples, all three cover states, exactly two dirty uploads, at most two
+material batches/three API calls, and 576 triangles. It sustains progress beyond
+the validator's frame-540 threshold and retirement checks. The first 40-second
+capture reached only frame 450 while other build work was active; the final
+75-second capture ran serially and was decoded with host FFmpeg. This is native
+correctness/progress evidence, not a frame-time comparison.
+[Result and source/DOL identity](measurements/indexed-cache/results.json).
+
+![Native indexed terrain and actors](measurements/indexed-cache/native.png)
