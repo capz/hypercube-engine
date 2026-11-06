@@ -29,6 +29,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Test ordered mesh pass contracts
+        run: dotnet run --project tests/OrderedMeshPasses.Tests -c Release
       - name: Build and test packed assets, scheduler and GameCube executable
         env:
           CONFIGURATION: ${{ matrix.configuration }}
