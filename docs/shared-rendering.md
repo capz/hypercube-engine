@@ -154,10 +154,12 @@ Host checks cover stable grouping, pose copies, overflow/reuse, exhaustive growt
 bounds, translated/rotated camera queries, failure atomicity, lease tickets and
 GPU retirement, mask packing/seams and allocation-free steady-state core calls.
 CI builds/runs the sample in Debug and Release and uploads DOL/ELF, results and
-captures with the existing validation artifacts. Both local and CI SDK pins now
-use b815694, the already validated AnimalTown SDK providing bulk mesh submission
-and complete draw telemetry. No SDK source modification or third texture support
-is included. Emulator correctness is not a physical GameCube speedup measurement.
+captures with the existing validation artifacts. Source validation and NuGet
+consumers use SDK commit f5dbd0a (package 0.1.0-preview.245.1), which includes the
+validated bulk mesh submission and complete drawing telemetry APIs. The package
+consumer checks that distributed SDK assemblies and compiler match that source
+revision. No third texture support is included. Emulator correctness is not a
+physical GameCube speedup measurement.
 
 Local verification for this change passed Debug/Release solution builds,
 1,050,052 rendering assertions plus the existing host suites, 36 Python tests,
