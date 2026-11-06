@@ -8,7 +8,9 @@ geometry or reduce the number of GPU samples.
 Create the plan and call `Set` between frames. `Draw` requires one texture,
 authored UVs, unlit shading and no custom effect. Pass colors replace the material
 color; pass UV transforms replace its primary transform. The caller's material
-is restored even if a portable draw throws. The mesh and texture remain owned
+is never mutated, including if a portable draw throws. The portable path warms
+a private working material during construction, so even a caller material with
+untouched lazy sampler/UV state cannot allocate in the first draw. The mesh and texture remain owned
 by the caller and must remain alive through the draw.
 
 The published-SDK build uses the ordered portable loop. With the source SDK PR

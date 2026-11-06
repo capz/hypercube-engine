@@ -14,6 +14,9 @@ public sealed class OrderedMeshPasses
     private readonly Mesh geometry;
     private readonly Color32[] colors;
     private readonly UvTransform[] uv;
+    // Warm the SDK's lazy native options outside the frame, including when
+    // the caller has never set a sampler or UV transform.
+    private readonly Material work=new Material{Sampler=new SamplerState()};
     public int Count=>colors.Length;
 #endif
     public OrderedMeshPasses(Mesh geometry,int count)
@@ -48,10 +51,12 @@ public sealed class OrderedMeshPasses
 #if HYPERCUBE_NATIVE_PASSES
         renderer.DrawMeshPasses(native,material,transform);
 #else
-        var savedColor=material.Color;var savedUv=material.TextureTransform;
+        work.Texture=material.Texture;work.Blend=material.Blend;work.Cull=material.Cull;
+        work.DepthTest=material.DepthTest;work.DepthWrite=material.DepthWrite;
+        work.AlphaCutoff=material.AlphaCutoff;work.Sampler=material.Sampler;
         try{for(int i=0;i<Count;i++){
-            material.Color=colors[i];material.TextureTransform=uv[i];renderer.DrawMesh(geometry,material,transform);
-        }}finally{material.Color=savedColor;material.TextureTransform=savedUv;}
+            work.Color=colors[i];work.TextureTransform=uv[i];renderer.DrawMesh(geometry,work,transform);
+        }}finally{work.Texture=null;}
 #endif
     }
 }
