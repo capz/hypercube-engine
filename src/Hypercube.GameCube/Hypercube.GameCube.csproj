@@ -2,6 +2,7 @@
   <Import Project="../../eng/Package.props" />
   <PropertyGroup>
     <IsPackable>true</IsPackable>
+    <DefineConstants Condition="'$(HypercubeNativePasses)' == 'true'">$(DefineConstants);HYPERCUBE_NATIVE_PASSES</DefineConstants>
     <PackageId>Capz.Hypercube.GameCube</PackageId>
     <Description>GameCube rendering, shared materials, GPU resource ownership and streaming adapters for Hypercube on DolphinDotNet.</Description>
   </PropertyGroup>
