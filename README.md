@@ -2,6 +2,9 @@
 
 Experimental GameCube engine built on [DolphinDotNet](https://github.com/capz/DolphinDotNet). The first implementation evaluates streaming dense, inefficient static geometry before committing to a production content format.
 
+[Indexed mesh caching](docs/indexed-mesh-cache.md) retains exact native geometry
+prefixes for stable assets and shares terrain vertices without capacity padding.
+
 Open **Hypercube.sln** for the engine, runtime adapter, host checks and console validation sample. The existing DolphinDotNet texture stress/comparison samples remain in the SDK repository.
 
 ## Build

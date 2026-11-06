@@ -1,0 +1,19 @@
+{
+  "validation": {
+    "frames": 327,
+    "phases": [
+      0,
+      1,
+      2
+    ],
+    "dirtyUploads": 2,
+    "maxBatchCalls": 2,
+    "maxApiCalls": 3,
+    "maxGxDraws": 18,
+    "maxTriangles": 576
+  },
+  "engine_source_commit": "1bef020b4cbb276964e0c9fd580b79b7a5999c95",
+  "sdk_source_commit": "985fa601760aec9edf29c025460ee15d6dd1ea2c",
+  "dol_sha256": "5ecca1217934b1d60d326fcb86f2f2cfc89a5257df850009539f4ea988641464",
+  "method": "75 seconds native capture, real host FFmpeg validator; no engine timing speedup claimed"
+}

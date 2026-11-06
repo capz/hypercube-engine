@@ -39,6 +39,7 @@ sdk_root="${DOLPHIN_DOTNET_ROOT:-$PWD/vendor/sdk}"
 if [[ ! -d "$sdk_root" && -d "$PWD/../DolphinDotNet" ]]; then sdk_root="$PWD/../DolphinDotNet"; fi
 sdk_root="$(cd "$sdk_root" && pwd)"
 mkdir -p out
+dotnet run --project tests/Hypercube.GameCube.Tests -c Release
 python3 tools/build_assets.py --resolution "${FIXTURE_RESOLUTION:-48}"
 python3 -m unittest discover -s tests -p 'test_*.py'
 dotnet run --project tests/Hypercube.Tests -c "$configuration" -- out/assets/world.hcp
