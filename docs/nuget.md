@@ -9,7 +9,11 @@ Core is a portable .NET 8 library. GameCube adds the engine's graphics and
 streaming adapters and depends on Core plus a specific published
 DolphinDotNet.GameCube version. The DolphinDotNet MSBuild SDK/compiler is a
 separate application requirement; it is not copied into an engine library nupkg.
-`Directory.Build.props` pins the package dependency version. Source validation
+`Directory.Build.props` pins the package dependency version to
+`DolphinDotNet.GameCube` **0.1.0-preview.266.1**. The matching compiler/Assets
+preview includes indexed unlit vertex-color submission and shared mesh color
+streams. `IndexedMeshCache` is included in this engine preview; ordered passes
+retain the portable implementation unless explicitly built for the native backend. Source validation
 continues to use the pinned SDK checkout from `.sdk-revision`.
 
 ## Build and test without publishing
