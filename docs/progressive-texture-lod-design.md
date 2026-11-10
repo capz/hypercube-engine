@@ -130,15 +130,17 @@ Suggested binary layout:
 | 32..35 | Index-table offset |
 | 36..39 | First data offset |
 | 40..43 | Declared file length |
-| 44..47 | Index-table CRC32 |
-| 48..63 | Zero-reserved |
+| 44..47 | Metadata CRC32: level table followed by optional UV transform table |
+| 48..51 | Optional per-level UV transform table offset (zero = identity for all levels) |
+| 52..55 | UV transform table byte length (zero when absent) |
+| 56..63 | Zero-reserved |
 
-Each 32-byte entry contains `logicalLod (u32)`, `width (u16)`, `height (u16)`, `GX format (u32)`, `flags (u32)`, `aligned byteOffset (u32)`, `padded byteLength (u32)`, `CRC32 (u32)` and `reserved (u32)`.
+Each 32-byte entry contains `logicalLod (u32)`, `width (u16)`, `height (u16)`, `GX format (u32)`, `flags (u32)`, `aligned byteOffset (u32)`, `padded byteLength (u32)`, `CRC32 (u32)` and `reserved (u32)`. If any level requires a non-identity UV mapping, the metadata region additionally includes a **16-byte per-level transform** in the same logical table order: little-endian float32 `scaleU`, `scaleV`, `offsetU`, `offsetV`. For simplicity, the UV table follows the level table without gaps, the metadata CRC covers their concatenation, and an absent UV table means identity at every level. All transforms must be finite and validated before use.
 
 - Logical LOD 0 is finest, even when only sparse levels were supplied. Low/high pair mode uses its own explicit semantic flag and entries HIGH (0), LOW (1), not artificial missing intermediate mips.
 - Individual data payloads are tiled and padded exactly as native GX expects. Validate native format size as well as header length/CRC; never trust an offset from an unvalidated index.
 - The tool writes **coarse payload first in physical file order** for fast initial reads; table order remains logical. All offsets are relative to the containing file/asset record.
-- Store independent per-level `uvScale`/`uvOffset` and optional gutter/usable-area metadata. These values are needed to keep authored UVs stable across tile sizes/atlas padding.
+- Store independent per-level `uvScale`/`uvOffset` using the validated UV table described above. Optionally preserve authoring-only gutter/usable-area information in the diagnostic manifest. These values keep authored UVs stable across tile sizes/atlas padding.
 - For complete authored mip chains, require power-of-two logical dimensions with actual half-size progression; sparse selections preserve the original logical LOD exponent.
 - A two-quality pair can have arbitrary non-zero dimensions allowed by the native standalone GX path.
 - Enforce 1024-texel SDK dimension limit, 32-byte alignment, single-destination and total-memory bounds. CMPR uses 8x8 padded tiles, RGBA8 4x4 padded tiles. Small logical mips still consume at least a padded tile.
