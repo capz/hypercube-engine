@@ -21,12 +21,7 @@
 - DolphinDotNet already generates DNTX v2 complete RGBA8 mip chains with ~~~sh
   dnd-assets texture input.png output.dndtex --mipmaps
   ~~~
-  and supports DNTX v2 runtime loading, explicit samplers and full-chain replacement. See DolphinDotNet ~~~text
-  tools/DolphinDotNet.Assets/DrawingPackages.cs
-  tools/DolphinDotNet.Assets/Program.cs
-  src/DolphinDotNet.GameCube/Dolphin/Graphics/Texture2D.cs
-  docs/graphics-phase-two.md
-  ~~~
+  and supports DNTX v2 runtime loading, explicit samplers and full-chain replacement. See DolphinDotNet `tools/DolphinDotNet.Assets/DrawingPackages.cs`, `tools/DolphinDotNet.Assets/Program.cs`, `src/DolphinDotNet.GameCube/Dolphin/Graphics/Texture2D.cs`, `docs/graphics-phase-two.md`.
 - DolphinDotNet's ~~~text
   StreamingTexture
   ~~~ already stages CPU-only native texels, publishes without a GPU wait and manages in-flight readers, but has **two fixed-dimension allocations**. It is not a variable-resolution texture slot.
@@ -103,11 +98,7 @@ public enum TextureQualityPolicy
 }
 ~~~
 
-For a low/high-only pair, ~~~text
-DistanceMip
-~~~ behaves as ~~~text
-FullQuality
-~~~ after coarse readiness, matching the requested behavior. An explicit forced downgrade under memory pressure is permitted; the reported target remains high.
+For a low/high-only pair, `DistanceMip` behaves as `FullQuality` after coarse readiness, matching the requested behavior. An explicit forced downgrade under memory pressure is permitted; the reported target remains high.
 
 ~~~csharp
 public readonly struct ResolvedTextureLod
@@ -119,11 +110,7 @@ public readonly struct ResolvedTextureLod
 }
 ~~~
 
-Prefer ~~~text
-StreamedMaterialTexture
-~~~ over extending DolphinDotNet's ~~~text
-Material
-~~~ with engine-specific streaming state. Resolve immediately before a draw; account for shared materials, two-texture TEV materials, atlas tiling and material sort keys.
+Prefer `StreamedMaterialTexture` over extending DolphinDotNet's `Material` with engine-specific streaming state. Resolve immediately before a draw; account for shared materials, two-texture TEV materials, atlas tiling and material sort keys.
 
 ### Distance/visibility selection
 
@@ -152,17 +139,13 @@ Texture2D.FromPackage
 
 ### Add streamable DNLT v1 alongside DNTX
 
-Use a new format/extension such as ~~~text
-.dnlod
-~~~ to avoid a breaking change in the native DNTX loader. The SDK asset tool emits one indexed package with independently addressable and 32-byte-aligned payloads.
+Use a new format/extension such as `.dnlod` to avoid a breaking change in the native DNTX loader. The SDK asset tool emits one indexed package with independently addressable and 32-byte-aligned payloads.
 
 Suggested binary layout:
 
 | Header (64 bytes; little-endian) | Field |
 |---|---|
-| 0..3 | ~~~text
-DNLT
-~~~ magic |
+| 0..3 | `DNLT` magic |
 | 4..7 | Version = 1 |
 | 8..11 | Flags: mip chain, sparse levels, low/high-only pair |
 | 12..19 | Logical full-resolution width, height |
@@ -184,11 +167,7 @@ CRC32 (u32), reserved (u32)
 - Logical LOD 0 is finest, even when only sparse levels were supplied. Low/high pair mode uses its own explicit semantic flag and entries HIGH (0), LOW (1), not artificial missing intermediate mips.
 - Individual data payloads are tiled and padded exactly as native GX expects. Validate native format size as well as header length/CRC; never trust an offset from an unvalidated index.
 - The tool writes **coarse payload first in physical file order** for fast initial reads; table order remains logical. All offsets are relative to the containing file/asset record.
-- Store independent per-level ~~~text
-uvScale
-~~~/~~~text
-uvOffset
-~~~ and optional gutter/usable-area metadata. These values are needed to keep authored UVs stable across tile sizes/atlas padding.
+- Store independent per-level `uvScale`/`uvOffset` and optional gutter/usable-area metadata. These values are needed to keep authored UVs stable across tile sizes/atlas padding.
 - For complete authored mip chains, require power-of-two logical dimensions with actual half-size progression; sparse selections preserve the original logical LOD exponent.
 - A two-quality pair can have arbitrary non-zero dimensions allowed by the native standalone GX path.
 - Enforce 1024-texel SDK dimension limit, 32-byte alignment, single-destination and total-memory bounds. CMPR uses 8x8 padded tiles, RGBA8 4x4 padded tiles. Small logical mips still consume at least a padded tile.
@@ -210,9 +189,7 @@ dnd-assets texture grass.png grass.dndtex --mipmaps
 
 ### Hypercube HCP integration
 
-The engine currently has HCPK v1 with 64-byte typed records, a fixed ~~~text
-AssetCatalog.Texture(format, group, mip, cell)
-~~~ grid and parent/fallback IDs. Preserve that for validation workloads.
+The engine currently has HCPK v1 with 64-byte typed records, a fixed `AssetCatalog.Texture(format, group, mip, cell)` grid and parent/fallback IDs. Preserve that for validation workloads.
 
 Introduce **HCPK v2** only when importing general streamable texture families:
 
@@ -225,9 +202,7 @@ Introduce **HCPK v2** only when importing general streamable texture families:
 
 ## SDK runtime work: variable-size upload without a whole-image staging copy
 
-Existing ~~~text
-StreamingTexture
-~~~ is ideal for repeated same-size pages but allocates both front and back textures permanently. Keep it unchanged for that use case. New mip-resolution swaps need one active allocation plus at most one **temporarily detached** destination. Add a safe SDK facility, named illustratively:
+Existing `StreamingTexture` is ideal for repeated same-size pages but allocates both front and back textures permanently. Keep it unchanged for that use case. New mip-resolution swaps need one active allocation plus at most one **temporarily detached** destination. Add a safe SDK facility, named illustratively:
 
 ~~~csharp
 using var upload = DetachedTextureUpload.Create(
@@ -246,19 +221,11 @@ if (upload.TryPublish(out Texture2D newTexture))
 
 Required implementation pieces in DolphinDotNet:
 
-1. A native ~~~text
-TextureStageBufferRange
-~~~ operation that copies from a held native buffer to a **detached** Texture2D at a checked 32-byte-aligned destination range. It performs CPU copy/cache flush only; no draw/GX command and no global GPU completion wait.
-2. A managed ~~~text
-DetachedTextureUpload
-~~~ owner that creates the single target on the application executor, tracks completed ranges, forbids overlap/missing ranges at publication, retains source lifetime through cancellation and has an explicit safe abort/dispose path.
-3. Reuse existing ~~~text
-TexturePublishStaged
-~~~ for application-thread cache invalidation and publication after checksum validation. The texture is never visible before completion.
+1. A native `TextureStageBufferRange` operation that copies from a held native buffer to a **detached** Texture2D at a checked 32-byte-aligned destination range. It performs CPU copy/cache flush only; no draw/GX command and no global GPU completion wait.
+2. A managed `DetachedTextureUpload` owner that creates the single target on the application executor, tracks completed ranges, forbids overlap/missing ranges at publication, retains source lifetime through cancellation and has an explicit safe abort/dispose path.
+3. Reuse existing `TexturePublishStaged` for application-thread cache invalidation and publication after checksum validation. The texture is never visible before completion.
 4. Expose physical byte counts for staged/current/retired allocations; do not confuse one logical resident level with total live native bytes.
-5. Transfer ownership of the published immutable ~~~text
-Texture2D
-~~~ to Hypercube, which already owns GPU frame pins, generation checks and eviction. The engine alone decides when older resources are safe to release.
+5. Transfer ownership of the published immutable `Texture2D` to Hypercube, which already owns GPU frame pins, generation checks and eviction. The engine alone decides when older resources are safe to release.
 
 This avoids a permanent 2x cost and allows larger texture levels without allocating a 256-KiB/1-MiB managed staging array. The destination allocation naturally still costs its full native texture bytes.
 
@@ -288,11 +255,7 @@ Unrequested -> CoarseQueued -> CoarseResident
                                 dispose old texture
 ~~~
 
-Use existing ~~~text
-ResourceScheduler
-~~~ IDs/priorities/generations and ~~~text
-WorldStreamer
-~~~ progress. On camera reversal, supersede the queued generation; draining an already started transfer is mandatory before recycling its storage. The active fallback is never evicted *just to start* a promotion; if temporary replacement headroom does not exist, defer promotion. A shared placeholder can remain permanent for cold starts, but each demanded family should become usable after its coarsest level arrives.
+Use existing `ResourceScheduler` IDs/priorities/generations and `WorldStreamer` progress. On camera reversal, supersede the queued generation; draining an already started transfer is mandatory before recycling its storage. The active fallback is never evicted *just to start* a promotion; if temporary replacement headroom does not exist, defer promotion. A shared placeholder can remain permanent for cold starts, but each demanded family should become usable after its coarsest level arrives.
 
 Scheduling order:
 
@@ -308,11 +271,7 @@ Handle low/high-only families as a two-state quality ladder. If mip selection is
 
 ### UV and model handling
 
-Do not reuse geometry UVs computed for a specific texture-record gutter/width. Author source-normalized mesh UVs, and apply the level's own gutter/usable-area transform through DolphinDotNet's existing ~~~text
-Material.TextureTransform
-~~~ / ~~~text
-SecondaryTextureTransform
-~~~ fields. Compose that static transform with scrolling/animation UV transforms at draw time. This applies to both ordinary objects and existing tile/atlas draw paths. Do not rebuild geometry solely to promote texture resolution.
+Do not reuse geometry UVs computed for a specific texture-record gutter/width. Author source-normalized mesh UVs, and apply the level's own gutter/usable-area transform through DolphinDotNet's existing `Material.TextureTransform` / `SecondaryTextureTransform` fields. Compose that static transform with scrolling/animation UV transforms at draw time. This applies to both ordinary objects and existing tile/atlas draw paths. Do not rebuild geometry solely to promote texture resolution.
 
 ### Memory accounting and example
 
@@ -327,17 +286,7 @@ For a 256x256 texture, ignoring allocator overhead and small-level tile padding:
 | 64x64 | 2 KiB | 16 KiB |
 | 32x32 | 0.5 KiB | 4 KiB |
 
-A full pyramid adds roughly one third above mip 0, whereas keeping only 64x64 instead of 256x256 saves 15/16 of that level's memory. Promotion temporarily needs both old and new plus bounded native staging; count it in the physical peak. Actual smaller levels round up to GX tile sizes. Log ~~~text
-activeBytes
-~~~ , ~~~text
-stagingBytes
-~~~ , ~~~text
-retiredBytes
-~~~ , ~~~text
-poolBytes
-~~~ and ~~~text
-ARAMBytes
-~~~ separately.
+A full pyramid adds roughly one third above mip 0, whereas keeping only 64x64 instead of 256x256 saves 15/16 of that level's memory. Promotion temporarily needs both old and new plus bounded native staging; count it in the physical peak. Actual smaller levels round up to GX tile sizes. Log `activeBytes` , `stagingBytes` , `retiredBytes` , `poolBytes` and `ARAMBytes` separately.
 
 ## Work plan / PR boundaries
 
@@ -360,9 +309,7 @@ ARAMBytes
 - Reuse ResourceScheduler, WorldStreamer, AssetStream and ARAM; introduce a dynamic-size single-resident texture slot next to the existing fixed-size TexturePool.
 - Attach texture handles and composed UV transforms to material draws. Publish only fully validated generations; retire after GPU fence.
 - Expose budget, coarse/fine readiness, bytes/cancel/stale/retire telemetry and a stress/inspection fixture.
-- Move ~~~text
-.sdk-revision
-~~~ only after both SDK PRs are merged/available and the pinned GameCube AOT build passes.
+- Move `.sdk-revision` only after both SDK PRs are merged/available and the pinned GameCube AOT build passes.
 
 **Hypercube PR 3 — production polish (conditional on console results)**
 - Prefetch heuristics, dynamic byte budgets and ARAM policy; optional limited resident GX mip tail for trilinear.
