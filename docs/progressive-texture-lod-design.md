@@ -18,35 +18,12 @@
 
 ## Current baseline — verified in repositories
 
-- DolphinDotNet already generates DNTX v2 complete RGBA8 mip chains with ~~~sh
-  dnd-assets texture input.png output.dndtex --mipmaps
-  ~~~
-  and supports DNTX v2 runtime loading, explicit samplers and full-chain replacement. See DolphinDotNet `tools/DolphinDotNet.Assets/DrawingPackages.cs`, `tools/DolphinDotNet.Assets/Program.cs`, `src/DolphinDotNet.GameCube/Dolphin/Graphics/Texture2D.cs`, `docs/graphics-phase-two.md`.
-- DolphinDotNet's ~~~text
-  StreamingTexture
-  ~~~ already stages CPU-only native texels, publishes without a GPU wait and manages in-flight readers, but has **two fixed-dimension allocations**. It is not a variable-resolution texture slot.
-- Hypercube's ~~~text
-  tools/hypercube/pack.py
-  ~~~ already creates independent GX-native CMPR/RGBA8 LOD records with parent IDs and gutters. ~~~text
-  AssetCatalog
-  ~~~ validates them; ~~~text
-  ResourceScheduler
-  ~~~ manages priority, cancel/retry/generations, pins and eviction; ~~~text
-  WorldStreamer
-  ~~~ reads and publishes them; ~~~text
-  AramCache
-  ~~~ can retain cold records.
-- Hypercube's existing ~~~text
-  TexturePool
-  ~~~ charges two copies per texture and reuses only matching width/format. ~~~text
-  WorldStreamer
-  ~~~ has a single 128-KiB native staging buffer and rejects a required batch above 131,040 bytes; larger standalone texture levels require **chunked publication**.
-- Hypercube's terrain ~~~text
-  PackedWorld.DecodeMesh
-  ~~~ bakes tile gutter/width into geometry UV coordinates for a selected LOD. Rebinding a different-sized texture without a per-level UV correction would be incorrect.
-- SDK integration is pinned by ~~~text
-  .sdk-revision
-  ~~~. SDK implementation must land and be validated before moving that pin in the engine.
+- DolphinDotNet already generates complete DNTX v2 RGBA8 mip chains using `dnd-assets texture input.png output.dndtex --mipmaps`. It supports runtime DNTX v2 loading, explicit samplers and whole-chain replacement. See `tools/DolphinDotNet.Assets/DrawingPackages.cs`, `tools/DolphinDotNet.Assets/Program.cs`, `src/DolphinDotNet.GameCube/Dolphin/Graphics/Texture2D.cs` and `docs/graphics-phase-two.md`.
+- DolphinDotNet's `StreamingTexture` stages CPU-only native texels and publishes without a GPU wait, but holds **two fixed-dimension allocations**. It is not a variable-resolution texture slot.
+- Hypercube's `tools/hypercube/pack.py` already creates independent GX-native CMPR/RGBA8 LOD records with parent IDs and gutters. `AssetCatalog` validates them, `ResourceScheduler` manages priority, cancellation, generations, pins and eviction, `WorldStreamer` reads and publishes them, and `AramCache` can retain cold records.
+- Hypercube's `TexturePool` charges two copies per texture and reuses only matching widths/formats. Its `WorldStreamer` has a 128-KiB native staging buffer and rejects a required batch above 131,040 bytes; larger standalone texture levels require **chunked publication**.
+- Hypercube's terrain `PackedWorld.DecodeMesh` bakes tile gutter/width into geometry UV coordinates for a selected LOD. Rebinding a differently sized texture without per-level UV correction would be incorrect.
+- SDK integration is pinned by `.sdk-revision`. The SDK implementation must land and be validated before updating the engine's pin.
 
 ## Architecture and ownership
 
@@ -133,9 +110,7 @@ Add hysteresis at promotion/demotion thresholds (suggest initial 20–30% band),
 
 ### Keep DNTX v1/v2 unchanged
 
-DNTX v2 is still appropriate for a *fully resident* GX mip pyramid and remains readable with ~~~csharp
-Texture2D.FromPackage
-~~~. Do not change its existing on-disk format or silently treat it as independently reclaimable levels.
+DNTX v2 is still appropriate for a *fully resident* GX mip pyramid and remains readable with `Texture2D.FromPackage`. Do not change its existing on-disk format or silently treat it as independently reclaimable levels.
 
 ### Add streamable DNLT v1 alongside DNTX
 
@@ -158,11 +133,7 @@ Suggested binary layout:
 | 44..47 | Index-table CRC32 |
 | 48..63 | Zero-reserved |
 
-Each 32-byte entry contains ~~~text
-logicalLod (u32), width (u16), height (u16), GX format (u32),
-flags (u32), aligned byteOffset (u32), padded byteLength (u32),
-CRC32 (u32), reserved (u32)
-~~~.
+Each 32-byte entry contains `logicalLod (u32)`, `width (u16)`, `height (u16)`, `GX format (u32)`, `flags (u32)`, `aligned byteOffset (u32)`, `padded byteLength (u32)`, `CRC32 (u32)` and `reserved (u32)`.
 
 - Logical LOD 0 is finest, even when only sparse levels were supplied. Low/high pair mode uses its own explicit semantic flag and entries HIGH (0), LOW (1), not artificial missing intermediate mips.
 - Individual data payloads are tiled and padded exactly as native GX expects. Validate native format size as well as header length/CRC; never trust an offset from an unvalidated index.
@@ -183,9 +154,7 @@ dnd-assets texture --low grass_low.png --high grass_high.png \
   grass.dnlod --streamable --quality-pair
 ~~~
 
-Keep existing ~~~sh
-dnd-assets texture grass.png grass.dndtex --mipmaps
-~~~ unchanged. Add equivalent model-import support once the standalone texture asset pipeline is validated; avoid forcing all imported textures into a full resident chain.
+Keep the existing `dnd-assets texture grass.png grass.dndtex --mipmaps` behavior unchanged. Add equivalent model-import support once the standalone texture asset pipeline is validated; avoid forcing all imported textures into a full resident chain.
 
 ### Hypercube HCP integration
 
