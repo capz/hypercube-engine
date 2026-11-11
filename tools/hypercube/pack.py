@@ -108,6 +108,15 @@ def decode_cmpr(data, width):
 class Builder:
     def __init__(self):
         self.items = []
+        self.families = []
+
+    def import_texture(self,name,path):
+        from .progressive import add_family
+        return add_family(self,name,path)
+
+    def import_textures(self,inputs):
+        from .progressive import add_families
+        return add_families(self,inputs)
 
     def add(self, kind, payload, *, fmt=0, group=0, mip=0, cell=0, parent=0, width=0, useful=0, material=0, variant=0):
         identity = len(self.items)+1
@@ -116,6 +125,9 @@ class Builder:
         return identity
 
     def write(self, path):
+        if self.families:
+            from .progressive import write
+            return write(self,path)
         start = align(HEADER.size+len(self.items)*RECORD.size)
         data, records = bytearray(start), bytearray()
         for item in self.items:
@@ -135,6 +147,9 @@ class Builder:
 
 def inspect(path):
     raw = Path(path).read_bytes()
+    if len(raw)>=8 and struct.unpack_from('<I',raw,4)[0]==2:
+        from .progressive import inspect as inspect_v2
+        return inspect_v2(raw)
     if len(raw) < HEADER.size:
         raise ValueError("Truncated header")
     magic,version,count,index,data,length,checksum,reserved = HEADER.unpack_from(raw)
