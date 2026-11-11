@@ -9,7 +9,8 @@ concurrency:
 permissions:
   contents: read
 jobs:
-  validation:
+  baseline-validation:
+    name: ${{ matrix.configuration == 'Debug' && 'validation (Debug)' || 'baseline validation (Release)' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -151,3 +152,18 @@ jobs:
             out/dolphin-*/user/Logs/
             out/dolphin-*/user/Dump/Audio/
           retention-days: 14
+
+  release-validation:
+    name: validation (Release)
+    needs: [baseline-validation, release-comparisons]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require baseline validation and every Release comparison
+        env:
+          BASELINE_RESULT: ${{ needs.baseline-validation.result }}
+          COMPARISONS_RESULT: ${{ needs.release-comparisons.result }}
+        run: |
+          test "$BASELINE_RESULT" = success
+          test "$COMPARISONS_RESULT" = success
