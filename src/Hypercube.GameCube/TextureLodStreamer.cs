@@ -5,8 +5,11 @@ using System.Threading.Tasks;
 using Dolphin.Graphics;
 using Dolphin.Storage;
 using Dolphin.Timing;
+using Dolphin.Memory;
 
 namespace Hypercube.GameCube;
+
+public enum TextureColdRetention { Disabled, ReversalCache, StrictRelease }
 
 public readonly struct ResolvedTextureLod
 {
@@ -46,6 +49,16 @@ public sealed class TextureLodStreamer : IDisposable
     public readonly TextureFamilyDemand Demands;
     public readonly AramCache Cold;
     public bool UseAram,StrictReleaseColdCopies;
+    private bool trimDisabledCold;
+    public TextureColdRetention ColdRetention=>!UseAram?TextureColdRetention.Disabled:StrictReleaseColdCopies?TextureColdRetention.StrictRelease:TextureColdRetention.ReversalCache;
+    public void SetColdRetention(TextureColdRetention retention)
+    {
+        if(retention<TextureColdRetention.Disabled||retention>TextureColdRetention.StrictRelease)throw new ArgumentOutOfRangeException("retention");
+        if(retention!=TextureColdRetention.Disabled&&!Aram.IsAvailable)throw new InvalidOperationException("Initialize ARAM before enabling a cold tier.");
+        UseAram=retention!=TextureColdRetention.Disabled;StrictReleaseColdCopies=retention!=TextureColdRetention.ReversalCache;
+        trimDisabledCold=!UseAram;
+        if(trimDisabledCold)Cold.TrimExcept(slot<0?0:Policy.Id(slot));
+    }
     public bool CorruptNextChunk,ShortNextRead;
     public int Frame {get;private set;}
     public int CompletedFrame {get;private set;}
@@ -59,6 +72,7 @@ public sealed class TextureLodStreamer : IDisposable
     public int AramBytes=>Cold.Bytes;
     public int PeakBytes,Publications,Cancellations,StaleUploads,Failures,ChecksumFailures,Deferred,Retirements,StorageBytes,ColdReadBytes,UploadedBytes,ReadOperations,Preemptions;
     public int CoarseReadyCount,DetailReadyCount,MaxPumpUs;
+    public int LastPumpUs {get;private set;}
     public long CoarseLatencyUs,DetailLatencyUs;
     public bool OwnsStaging=>read!=null||copy!=null||store!=null;
     public bool HasTransfer=>upload!=null||OwnsStaging;
@@ -86,6 +100,13 @@ public sealed class TextureLodStreamer : IDisposable
     }
     public void Demand(StreamedMaterialTexture binding,TextureFootprint footprint,ResourcePriority priority=ResourcePriority.Visible)=>Demands.Demand(binding,footprint,priority);
     public void DemandKnownLod(StreamedMaterialTexture binding,int logicalLevel,ResourcePriority priority=ResourcePriority.Visible)=>Demands.DemandKnownLod(binding,logicalLevel,priority);
+    public bool Prefetch(StreamedMaterialTexture binding,TexturePrefetchHint hint,TextureWorkBudget budget,int reserveBytes=32768)
+    {
+        int free=Math.Max(0,Policy.BudgetBytes-PhysicalBytes-(externalBytes?.Invoke()??0));
+        var family=binding.Family;int bytes=catalog.Get(family.GetLevel(family.CoarseIndex).RecordId).Length;
+        if(!TexturePrefetchPolicy.Likely(hint,budget,free,bytes,reserveBytes))return false;
+        Demands.DemandKnownLod(binding,family.GetLevel(family.CoarseIndex).LogicalLevel,ResourcePriority.Prefetch);return true;
+    }
     public bool CoarseReady(int family)=>active[family]!=null;
     public bool DetailReady(int family)=>active[family]!=null&&resident[family]==Demands.TargetIndex(family);
     public int ResidentIndex(int family)=>resident[family];
@@ -221,8 +242,13 @@ public sealed class TextureLodStreamer : IDisposable
         if(uploadBudgetBytes<0||cpuBudgetUs<0)throw new ArgumentOutOfRangeException("uploadBudgetBytes");
         long start=Clock.Timestamp;
         try{PumpWork(uploadBudgetBytes,cpuBudgetUs,allowStart,start);}
-        finally{int cost=(int)(Clock.Timestamp-start);if(cost>MaxPumpUs)MaxPumpUs=cost;PeakBytes=Math.Max(PeakBytes,PhysicalBytes+(externalBytes?.Invoke()??0));}
+        finally{
+            if(trimDisabledCold&&Cold.Bytes>0)Cold.TrimExcept(slot<0?0:Policy.Id(slot));
+            int cost=(int)(Clock.Timestamp-start);LastPumpUs=cost;if(cost>MaxPumpUs)MaxPumpUs=cost;PeakBytes=Math.Max(PeakBytes,PhysicalBytes+(externalBytes?.Invoke()??0));
+        }
     }
+    public void Pump(TextureWorkBudget budget,bool allowStart=true)
+    {if(budget.CpuMicroseconds<1)throw new ArgumentException("Use a constructed work budget.");Pump(budget.UploadBytes,budget.CpuMicroseconds,allowStart);}
     private void PumpWork(int budget,int cpuBudget,bool allowStart,long start)
     {
         Collect();if(ownPolicy){PrepareDemand();Policy.CancelUnneeded();}
@@ -263,7 +289,7 @@ public sealed class TextureLodStreamer : IDisposable
                 }
             }
             if(!Policy.Complete(slot,tag,true,Frame)){Discard(false);return;}
-            if(!Policy.CanPublish(slot,record.Length)){Policy.Defer(slot,Frame);upload!.Dispose();upload=null;cancellation!.Dispose();cancellation=null;slot=-1;Deferred++;return;}
+            if(!Policy.CanPublish(slot,record.Length)){Policy.Defer(slot,Frame);upload!.Dispose();upload=null;cancellation!.Dispose();cancellation=null;slot=-1;if(StrictReleaseColdCopies)Cold.Drop(record.Id);Deferred++;return;}
             if(!upload!.TryPublish(out var texture))throw new InvalidOperationException("Validated texture did not publish.");
             if(active[familyId]!=null)Retire(familyId);
             active[familyId]=texture;resident[familyId]=levelIndex;activeSlots[familyId]=slot;generations[familyId]++;lastUse[familyId]=default;

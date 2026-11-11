@@ -28,7 +28,8 @@ internal static class Program
                 if(lods.UploadBytes>131072){stream.DemandCollision(1);lateRequested=true;}
                 if(lateRequested)lods.Demand(late,new TextureFootprint(128,128));
                 stream.Pump();
-                if(frame==0)Check(stream.Policy.State(stream.Policy.Find(world.Catalog.Collision(0)))==ResourceState.Reading&&!lods.HasTransfer,"Gameplay did not precede missing coarse texture.");
+                if(frame==0)
+                {stream.SetColdRetention(TextureColdRetention.StrictRelease);Check(stream.Policy.State(stream.Policy.Find(world.Catalog.Collision(0)))==ResourceState.Reading&&!lods.HasTransfer,"Gameplay did not precede missing coarse texture.");Check(lods.ColdRetention==TextureColdRetention.ReversalCache,"Cold policy changed before the outstanding batch drained.");}
                 if(lods.UploadBytes>131072&&stream.Ready(world.Catalog.Collision(1)))preempted=true;
                 if(lods.CoarseReady(late.Family.Id)&&!lods.DetailReady(binding.Family.Id))lateReady=true;
                 if(lods.DetailReady(binding.Family.Id))
@@ -36,7 +37,7 @@ internal static class Program
                     Check(preempted,"Chunked promotion blocked gameplay/collision preemption.");
                     Check(lateReady,"A late visible coarse family was blocked behind a detached upgrade.");
                     Check(stream.PhysicalBytes<=stream.Policy.BudgetBytes&&world.NativeBytes>0,"World/staging/permanent residency not counted.");
-                    Check(stream.NormalizedTextureUvs,"Normalized UV opt-in lost.");stopping=true;
+                    Check(lods.ColdRetention==TextureColdRetention.StrictRelease,"Deferred shared cold policy was never applied.");Check(stream.NormalizedTextureUvs,"Normalized UV opt-in lost.");stopping=true;
                 }
             }
             else done=stream.Stop();

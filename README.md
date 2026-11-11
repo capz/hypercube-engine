@@ -9,7 +9,7 @@ Open **Hypercube.sln** for the engine, runtime adapter, host checks and console 
 
 ## Build
 
-Requirements: .NET 8, Python 3.10+, Git and Docker.
+Requirements: .NET 8, Python 3.10+, Git, Docker and FFmpeg (for capture-decoding tests and comparison tools).
 
 ```sh
 mkdir -p vendor

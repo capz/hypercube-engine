@@ -35,6 +35,14 @@ public sealed class WorldStreamer : IDisposable
     private bool stopping;
     public int Frame,CompletedFrame,Group=1,Format=14,ReadBatchBytes=32768,MaxBatchRecords=4;
     public bool UseAram,InjectFaults,AdaptiveFallback,CoarseFirst,TexturesOnly,ProfileReads;
+    private int pendingColdRetention=-1;
+    private bool strictCold;
+    public void SetColdRetention(TextureColdRetention retention)
+    {
+        if(retention<TextureColdRetention.Disabled||retention>TextureColdRetention.StrictRelease)throw new ArgumentOutOfRangeException("retention");
+        if(retention!=TextureColdRetention.Disabled&&!Dolphin.Memory.Aram.IsAvailable)throw new InvalidOperationException("Initialize ARAM before enabling a cold tier.");
+        pendingColdRetention=(int)retention;
+    }
     private long readAt;
     private DemandPlan? demandPlan;
     private bool recordDemandPlan;
@@ -144,7 +152,7 @@ public sealed class WorldStreamer : IDisposable
         if(meshes[slot]!=null){meshes[slot]!.Dispose();meshes[slot]=null;otherBytes-=owned[slot];}
         if(collisionBuffers[slot]!=null)
         {collisionBuffers[slot]!.Dispose();collisionBuffers[slot]=null;otherBytes-=owned[slot];Cells.CollisionMissing(r.Cell);}
-        owned[slot]=0;Policy.Evict(slot,CompletedFrame,incoming);return true;
+        owned[slot]=0;Policy.Evict(slot,CompletedFrame,incoming);if(strictCold)Cold.Drop(r.Id);return true;
     }
     private bool ReclaimForTextureLod(ResourcePriority priority)
     {
@@ -259,6 +267,13 @@ public sealed class WorldStreamer : IDisposable
     }
     private void PumpWork(long pumpAt)
     {
+        // Do not trim a legacy coalesced ARAM batch while it still has future
+        // per-record fetches to issue. Family transfers protect their own ID.
+        if(count==0&&pendingColdRetention>=0)
+        {
+            var retention=(TextureColdRetention)pendingColdRetention;UseAram=retention!=TextureColdRetention.Disabled;strictCold=retention==TextureColdRetention.StrictRelease;
+            if(TextureLods!=null)TextureLods.SetColdRetention(retention);else if(!UseAram)Cold.Trim();pendingColdRetention=-1;
+        }
         int publishedBefore=Publications;
         TextureLods?.PrepareDemand();
         Policy.CancelUnneeded();

@@ -175,3 +175,8 @@ failure/retirement counters, and zero bytes after final trim. It records p95/p99
 frame times and readiness latency as emulator observations, with an explicit
 `hardwarePerformanceClaim: false` marker. Real GameCube SD2SP2/disc/audio pressure
 and latency gates still require physical-console captures.
+
+The opt-in budget/prefetch/ARAM controls, generated model materials, bounded
+resident mip tails and matched-quality/hardware evidence contract are documented
+in [progressive-production.md](progressive-production.md). Hardware acceptance
+remains conditional on physical-console measurements.
