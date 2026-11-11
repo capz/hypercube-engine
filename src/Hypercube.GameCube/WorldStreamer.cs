@@ -13,15 +13,16 @@ public sealed class WorldStreamer : IDisposable
     public readonly ResourceScheduler Policy;
     public readonly TexturePool Textures=new TexturePool();
     public readonly AramCache Cold;
+    public readonly TextureLodStreamer? TextureLods;
     public readonly CellReadiness Cells=new CellReadiness();
     private readonly AssetCatalog catalog;
     private readonly PackedWorld world;
     private readonly AssetStream stream;
     private readonly NativeBuffer staging=NativeBuffer.Allocate(131072);
-    private readonly Mesh?[] meshes=new Mesh?[ResourceCapacity];
-    private readonly NativeBuffer?[] collisionBuffers=new NativeBuffer?[ResourceCapacity];
-    private readonly int[] textureSlots=new int[ResourceCapacity],owned=new int[ResourceCapacity];
-    private readonly int[] triangleCounts=new int[ResourceCapacity];
+    private readonly Mesh?[] meshes;
+    private readonly NativeBuffer?[] collisionBuffers;
+    private readonly int[] textureSlots,owned;
+    private readonly int[] triangleCounts;
     private readonly float[] heights=new float[216];
     private readonly int[] heightMasks=new int[24];
     private readonly int[] batch=new int[8],tags=new int[8],batchIds=new int[8];
@@ -42,21 +43,30 @@ public sealed class WorldStreamer : IDisposable
     public int ReadLatencyCalls,MaxReadLatencyUs;
     // Zero time budget retains legacy behavior. A single native call cannot be preempted.
     public int ChecksumBytesPerPump=8192,CreatesPerPump=4,PumpBudgetUs;
+    public int TextureUploadBudgetBytes=32768,TextureCpuBudgetUs=1000;
+    public bool NormalizedTextureUvs {get;}
     public long PumpUs;
     public int PumpCalls;
     public int ReadOperations,StorageBytes,AramBytes,Failures,ChecksumFailures,ShortReads,Corruptions,Delays,Batches,MaxBatch,
         MultiplePublications,CancelledUploads,UploadedBytes,ChecksumUs,MaxUploadUs,MaxPumpUs,MeshTriangles,Deferred,Publications;
-    public int PhysicalBytes=>Textures.PhysicalBytes+otherBytes;
+    public int PhysicalBytes=>Textures.PhysicalBytes+otherBytes+(TextureLods==null?0:world.NativeBytes+staging.Length+TextureLods.PhysicalBytes);
+    public int PeakPhysicalBytes {get;private set;}
     public int Active=>count;
-    public WorldStreamer(PackedWorld world,string path,int budgetBytes=384*1024)
+    public WorldStreamer(PackedWorld world,string path,int budgetBytes=384*1024,bool normalizedTextureUvs=false)
     {
         this.world=world;scratch=world.Scratch;catalog=world.Catalog;stream=world.Assets;
-        Policy=new ResourceScheduler(catalog,ResourceCapacity,budgetBytes);
+        int capacity=catalog.FamilyCount==0?ResourceCapacity:256;
+        Policy=new ResourceScheduler(catalog,capacity,budgetBytes);
+        meshes=new Mesh?[capacity];collisionBuffers=new NativeBuffer?[capacity];textureSlots=new int[capacity];owned=new int[capacity];triangleCounts=new int[capacity];
         Cold=new AramCache(catalog.Count,256*1024);
+        NormalizedTextureUvs=normalizedTextureUvs;
+        if(catalog.FamilyCount>0)TextureLods=new TextureLodStreamer(catalog,stream,budgetBytes,Policy,Cold,staging,
+            ()=>world.NativeBytes+Textures.PhysicalBytes+otherBytes+staging.Length,ReclaimForTextureLod);
         for(int i=0;i<textureSlots.Length;i++)textureSlots[i]=-1;
         for(int i=0;i<24;i++)if(world.HasCell(i))Cells.CoarseReady(i);
     }
-    public void BeginDemand()=>Policy.BeginDemand();
+    public void BeginDemand(){Policy.BeginDemand();TextureLods?.BeginFrame(Frame,CompletedFrame);}
+    public void EndFrame(GpuFence fence)=>TextureLods?.EndFrame(fence);
     private void Demand(int id,ResourcePriority priority)
     {
         if(recordDemandPlan)demandPlan!.Add(id,priority);
@@ -64,7 +74,7 @@ public sealed class WorldStreamer : IDisposable
         // Slot capacity is independent of byte capacity. Reclaim an unneeded
         // resident even when the byte budget itself still has room.
         int victim=Policy.EvictionCandidate(CompletedFrame,priority);
-        if(victim>=0){Release(victim,priority);Policy.Demand(id,priority);}
+        if(victim>=0&&Release(victim,priority))Policy.Demand(id,priority);
     }
     public void DemandCell(int cell,int lod,bool raw=false)
     {
@@ -126,14 +136,20 @@ public sealed class WorldStreamer : IDisposable
         float a=heights[at]*(1-fx)+heights[at+1]*fx,b=heights[at+3]*(1-fx)+heights[at+4]*fx;
         return a*(1-fz)+b*fz;
     }
-    private void Release(int slot,ResourcePriority incoming)
+    private bool Release(int slot,ResourcePriority incoming)
     {
         var r=catalog.Get(Policy.Id(slot));
+        if(r.Kind==6)return TextureLods!=null&&TextureLods.Evict(slot,incoming);
         if(textureSlots[slot]>=0){Textures.Unbind(textureSlots[slot]);textureSlots[slot]=-1;}
         if(meshes[slot]!=null){meshes[slot]!.Dispose();meshes[slot]=null;otherBytes-=owned[slot];}
         if(collisionBuffers[slot]!=null)
         {collisionBuffers[slot]!.Dispose();collisionBuffers[slot]=null;otherBytes-=owned[slot];Cells.CollisionMissing(r.Cell);}
-        owned[slot]=0;Policy.Evict(slot,CompletedFrame,incoming);
+        owned[slot]=0;Policy.Evict(slot,CompletedFrame,incoming);return true;
+    }
+    private bool ReclaimForTextureLod(ResourcePriority priority)
+    {
+        if(Textures.TrimFree()>0)return true;
+        int victim=Policy.EvictionCandidate(CompletedFrame,priority);return victim>=0&&Release(victim,priority);
     }
     private bool Room(int extra,ResourcePriority priority)
     {
@@ -142,7 +158,7 @@ public sealed class WorldStreamer : IDisposable
             if(Textures.TrimFree()>0)continue;
             int victim=Policy.EvictionCandidate(CompletedFrame,priority);
             if(victim<0)return false;
-            Release(victim,priority);
+            if(!Release(victim,priority))return false;
         }
         return true;
     }
@@ -151,7 +167,7 @@ public sealed class WorldStreamer : IDisposable
         while(PhysicalBytes+Textures.ExtraBytes(record)>Policy.BudgetBytes)
         {
             int victim=Policy.EvictionCandidate(CompletedFrame,priority);
-            if(victim>=0){Release(victim,priority);continue;}
+            if(victim>=0&&Release(victim,priority))continue;
             if(Textures.TrimFree()>0)continue;
             return false;
         }
@@ -159,9 +175,9 @@ public sealed class WorldStreamer : IDisposable
     }
     private void Queue()
     {
-        int limit=Policy.RequiredBatchBytes(Frame,ReadBatchBytes);
+        int limit=Policy.RequiredBatchBytes(Frame,ReadBatchBytes,6);
         if(limit>131040)throw new IOException("Asset exceeds the bounded native staging size.");
-        count=Policy.BeginBatch(Frame,limit,MaxBatchRecords,batch,out batchOffset,out batchLength);
+        count=Policy.BeginBatch(Frame,limit,MaxBatchRecords,batch,out batchOffset,out batchLength,6);
         if(count==0)return;
         // A large record may exceed the requested coalescing size; SDK reads it
         // in bounded chunks. Adjacent small records still share one logical read.
@@ -215,7 +231,7 @@ public sealed class WorldStreamer : IDisposable
             {
                 int tile=(r.Cell/6/Group)*((6+Group-1)/Group)+(r.Cell%6/Group);
                 var texture=catalog.Get(catalog.Texture(Format,Group,r.Mip,tile));
-                meshes[slot]=world.DecodeMesh(scratch,r,texture,Group);
+                meshes[slot]=world.DecodeMesh(scratch,r,texture,Group,NormalizedTextureUvs);
                 bytes=meshes[slot]!.NativeBytes;triangleCounts[slot]=Binary.U16(scratch,6)/3;MeshTriangles+=triangleCounts[slot];
             }
             else
@@ -238,13 +254,24 @@ public sealed class WorldStreamer : IDisposable
         {
             int elapsed=(int)(Clock.Timestamp-pumpAt);PumpUs+=elapsed;PumpCalls++;
             if(elapsed>MaxPumpUs)MaxPumpUs=elapsed;
+            PeakPhysicalBytes=Math.Max(PeakPhysicalBytes,PhysicalBytes);
         }
     }
     private void PumpWork(long pumpAt)
     {
         int publishedBefore=Publications;
+        TextureLods?.PrepareDemand();
         Policy.CancelUnneeded();
-        if(count==0){if(!stopping)Queue();return;}
+        if(count==0)
+        {
+            if(TextureLods!=null)
+            {
+                TextureLods.UseAram=UseAram;
+                TextureLods.Pump(stopping?0:TextureUploadBudgetBytes,TextureCpuBudgetUs,!stopping);
+                if(TextureLods.OwnsStaging)return;
+            }
+            if(!stopping)Queue();return;
+        }
         if(actualRead<0)
         {
             if(reading==null||!reading.IsCompleted||Frame<holdUntil)return;
@@ -316,11 +343,12 @@ public sealed class WorldStreamer : IDisposable
     public bool Stop()
     {
         stopping=true;Policy.BeginDemand();Policy.CancelUnneeded();
-        if(count!=0){Pump();return false;}return true;
+        if(count!=0){Pump();return false;}return TextureLods==null||TextureLods.Stop();
     }
     public void Dispose()
     {
         if(count!=0)throw new InvalidOperationException("Drain streaming work before disposal.");
+        TextureLods?.Dispose();
         for(int i=0;i<meshes.Length;i++){meshes[i]?.Dispose();collisionBuffers[i]?.Dispose();}
         Textures.Dispose();Cold.Dispose();staging.Dispose();otherBytes=0;
     }

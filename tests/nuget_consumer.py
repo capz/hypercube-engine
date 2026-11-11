@@ -17,6 +17,9 @@ def main():
     work=(args.workspace or Path(tempfile.mkdtemp(prefix='hypercube nuget '))).resolve()
     if work.exists() and any(work.iterdir()):p.error('Consumer workspace must be empty')
     work.mkdir(parents=True,exist_ok=True);feed=work/'relocated feed';feed.mkdir()
+    manifest_path=args.feed/'packages.json';manifest=json.loads(manifest_path.read_text()) if manifest_path.is_file() else {}
+    if manifest.get('sdkSourcePreview'):
+        for package in (args.feed/'sdk-feed').glob('*.nupkg'):shutil.copy2(package,feed)
     ids=['Capz.Hypercube.Core']+([] if args.core_only else ['Capz.Hypercube.GameCube']);versions={}
     for identity in ids:
         packages=list(args.feed.glob(identity+'.*.nupkg'))
@@ -34,7 +37,7 @@ def main():
 class Program {static void Main(){var q=new OpaqueDrawQueue(2);q.TryAdd(1,2,0xffffffff,DrawPose.Identity);q.Group();if(q.At(0).Mesh!=1)throw new Exception();var c=new CameraFrustum(0,0,0,0,0,-1,0,1,0,60,1,1,20);if(!c.Sphere(0,0,-5,1))throw new Exception();var r=new ResourceLeases(1,1,4);r.Register(1,4);var l=r.Acquire(1);r.Release(l);if(r.RemoveUnused(0)!=0)throw new Exception();Console.WriteLine("External Core NuGet consumer passed");}}
 ''')
     run('dotnet','run','--project',str(core),'-c','Release')
-    sdk=ET.parse(ROOT/'Directory.Build.props').find('.//DolphinDotNetPackageVersion').text
+    sdk=manifest.get('sdkVersion') or ET.parse(ROOT/'Directory.Build.props').find('.//DolphinDotNetPackageVersion').text
     if not args.core_only:
         app=work/'GameCube';app.mkdir()
         (app/'GameCube.csproj').write_text('<Project Sdk="DolphinDotNet.Sdk/'+sdk+'"><ItemGroup><PackageReference Include="Capz.Hypercube.GameCube" Version="'+versions[ids[1]]+'"/></ItemGroup></Project>')
