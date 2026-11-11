@@ -1,0 +1,57 @@
+{
+  "artifacts": {
+    "out/native-progressive-Release/Game.dol": "f5f93cb2a37a779517e769ffc09dbeefa648adcc3519abdc3622f30d14fc452a",
+    "out/progressive/textures.hcp": "1ad90536c358b56ed773c9f822231fc0026b8765608460a723ba404d131bfcad"
+  },
+  "audio": [
+    {
+      "activeWindows": 254,
+      "file": "ID-Game_2026-11-11_13-17-52_dspdump1.wav",
+      "longestQuietMs": 0,
+      "seconds": 25.36424378668665
+    }
+  ],
+  "coarsePixelFrames": 5,
+  "fineDualUvPixelFrames": 10,
+  "hardwarePerformanceClaim": false,
+  "implementationCommit": "a122bd5b7aad86ba211e6b3dbcd05e389ad6b732",
+  "last": {
+    "active32": 0,
+    "aram32": 0,
+    "aramHits": 25,
+    "audioActive": 1,
+    "cancelled": 26,
+    "checksum": 17963,
+    "coarseMask": 15,
+    "coarseMeanMs": 170,
+    "coarseReady": 5,
+    "coldKiB": 14,
+    "crcFailures": 1,
+    "deferred": 2,
+    "detailMask": 0,
+    "detailMeanMs": 210,
+    "detailReady": 7,
+    "failures": 2,
+    "frame": 1507,
+    "frame95ms": 17,
+    "frame99ms": 17,
+    "magic": 18516,
+    "maxPumpUs": 2382,
+    "peakKiB": 652,
+    "phase": 10,
+    "poolBytes": 0,
+    "publications": 8,
+    "readBufferKiB": 0,
+    "retired32": 0,
+    "retirements": 8,
+    "stale": 25,
+    "storageKiB": 1190,
+    "upload32": 0,
+    "uploadedKiB": 1171
+  },
+  "pixelPatches": 12,
+  "platform": "Dolphin",
+  "sampledFrames": 252,
+  "sdkRevision": "415476f42eddba4c3a01fc81902da60b06280486",
+  "validationScope": "Dolphin correctness and ownership regression; no physical-console performance or measured page/atlas strategy comparison claim."
+}
