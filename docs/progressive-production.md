@@ -133,7 +133,7 @@ python3 tools/progressive_acceptance.py --output comparison.json compare \
 
 Admission rejects differing content, camera, shader, sampler, viewport, source
 texel density, native format, SDK or physical ceiling. Both captures must be the
-same camera frame and meet the reference RMSE threshold (RGB 0..255 units).
+same camera frame over the same measured frame window and meet the reference RMSE threshold (RGB 0..255 units).
 Report P95/P99 frame times, P95 coarse/detail readiness, physical/ARAM peaks,
 storage/ARAM traffic, draws and texture binds together. A lower-detail or
 higher-memory result cannot establish a faster strategy. Repeat runs and
@@ -148,9 +148,10 @@ A run JSON contains `schema:1`, a unique `runId`, `platform` (`Dolphin` or
 hardware. Include 64-character lowercase SHA256 fields `contentSha256`,
 `sceneSha256`, `cameraTraceSha256`, `shaderSha256`, `samplerSha256`, `dolSha256`,
 `packSha256`; a 40-character `sdkRevision`; `width`, `height`, `format`
-(`RGBA8`/`CMPR`), `texelsPerWorldUnit`, `physicalCeilingBytes`, and `captureFrame`.
+(`RGBA8`/`CMPR`), `texelsPerWorldUnit`, `physicalCeilingBytes`, `measuredStartFrame`, and `captureFrame`.
 
-Record at least 300 measured `frames`, each with `frameUs`, `audioActive:true`,
+Record at least 300 measured `frames`, each with consecutive camera `frame` indices starting at `measuredStartFrame`,
+`frameUs`, `audioActive:true`,
 and a `memory` object. Its fields are `activeBytes`, `uploadBytes` (the entire
 private target allocation, not just bytes already copied), `readBufferBytes`,
 `retiredBytes`, `poolBytes`, `externalBytes`, `physicalBytes` (sum of those six),

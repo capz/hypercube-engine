@@ -31,7 +31,7 @@ def _number(v,low,high):
 def model_density(path):
     data=path.read_bytes()
     if len(data)<112 or data[:4]!=b'DNDM' or struct.unpack_from('>I',data,4)[0] not in (1,2):raise ValueError('DNDM version')
-    
+
     def fnv(raw):
         value=2166136261
         for b in raw:value=((value^b)*16777619)&0xffffffff
