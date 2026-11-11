@@ -2,7 +2,8 @@
   <PropertyGroup>
     <DndBuildNative Condition="'$(DndBuildNative)' == ''">false</DndBuildNative>
     <IsPackable>false</IsPackable>
-    <DolphinDotNetPackageVersion>0.1.0-preview.305.1</DolphinDotNetPackageVersion>
+    <DolphinDotNetPackageVersion>0.1.0-preview.315.1</DolphinDotNetPackageVersion>
+    <HypercubeNativePasses Condition="'$(HypercubeNativePasses)' == ''">true</HypercubeNativePasses>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

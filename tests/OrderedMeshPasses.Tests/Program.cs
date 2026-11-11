@@ -10,6 +10,11 @@ static class Program
   for(int i=0;i<3;i++)p.Set(i,new Color32(i),new UvTransform(i));
   GraphicsDevice.Default.IsFrameActive=true;Reject(()=>p.Set(0,new Color32(0),default));GraphicsDevice.Default.IsFrameActive=false;
   p.Draw(r,m,t);Check(r.Calls==3&&m.Color.Value==9&&m.TextureTransform.Value==9);
+#if HYPERCUBE_NATIVE_PASSES
+  Check(r.NativeCalls==1);
+#else
+  Check(r.NativeCalls==0);
+#endif
   r.Calls=0;r.FailAt=1;try{p.Draw(r,m,t);}catch(InvalidOperationException){}Check(r.Calls==2&&m.Color.Value==9&&m.TextureTransform.Value==9);
   r.FailAt=-1;r.Calls=0;m.SecondaryTexture=new Texture2D();Reject(()=>p.Draw(r,m,t));Check(r.Calls==0);m.SecondaryTexture=null;
   var cold=new Material{Texture=m.Texture};p.Draw(r,m,t);r.Calls=0;long before=GC.GetAllocatedBytesForCurrentThread();for(int i=0;i<1000;i++){p.Draw(r,cold,t);r.Calls=0;}Check(GC.GetAllocatedBytesForCurrentThread()==before);
@@ -19,6 +24,11 @@ static class Program
 namespace Dolphin.Graphics
 {
  public sealed class Mesh{}public sealed class Texture2D{}public sealed class Transform{}
+ public sealed class MeshPasses{
+  internal readonly Color32[] Colors;internal readonly UvTransform[] Uv;public int Count=>Colors.Length;
+  public MeshPasses(Mesh mesh,int count){if(GraphicsDevice.Default.IsFrameActive)throw new InvalidOperationException();Colors=new Color32[count];Uv=new UvTransform[count];}
+  public void Set(int i,Color32 color,UvTransform uv){Colors[i]=color;Uv[i]=uv;}
+ }
  public enum LightingMode{Unlit,Diffuse}public enum TextureCoordinateMode{Uv0,ViewNormal}
  public readonly struct Color32{public readonly int Value;public Color32(int v){Value=v;}public static Color32 White=>new(255);}
  public readonly struct UvTransform{public readonly int Value;public UvTransform(int v){Value=v;}}
@@ -31,5 +41,8 @@ namespace Dolphin.Graphics
   public UvTransform TextureTransform{get=>uv;set{uv=value;options??=new float[40];}}
   public SamplerState Sampler{get=>sampler;set{sampler=value;options??=new float[40];}}
  }
- public sealed class Renderer{public int Calls,FailAt=-1;public void DrawMesh(Mesh mesh,Material m,Transform t){int i=Calls++;if(FailAt==i)throw new InvalidOperationException();if(m.Color.Value!=i||m.TextureTransform.Value!=i)throw new Exception("Reordered passes");}}
+ public sealed class Renderer{public int Calls,NativeCalls,FailAt=-1;
+  public void DrawMesh(Mesh mesh,Material m,Transform t){int i=Calls++;if(FailAt==i)throw new InvalidOperationException();if(m.Color.Value!=i||m.TextureTransform.Value!=i)throw new Exception("Reordered passes");}
+  public void DrawMeshPasses(MeshPasses passes,Material m,Transform t){NativeCalls++;for(int n=0;n<passes.Count;n++){int i=Calls++;if(FailAt==i)throw new InvalidOperationException();if(passes.Colors[n].Value!=i||passes.Uv[n].Value!=i)throw new Exception("Reordered native passes");}}
+ }
 }
