@@ -17,7 +17,7 @@ public readonly struct TextureDrawKey
 public sealed class StreamedMaterialBinding
 {
     private readonly TextureLodStreamer textures;
-    private readonly Material resolved=new Material();
+    private readonly Material resolved=new Material{Sampler=new SamplerState()};
     public Material Template {get;}
     public StreamedMaterialTexture? Primary {get;}
     public StreamedMaterialTexture? Secondary {get;}

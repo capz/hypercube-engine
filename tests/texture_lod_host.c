@@ -18,7 +18,11 @@ int main(void)
         DndException *e=(DndException*)dnd_exception_object();if(e&&e->message){for(uint32_t i=0;i<e->message->length;i++)fputc(e->message->chars[i],stderr);fputc('\n',stderr);}return 1;
     }
     assert(dnd_draw_total_bytes()==0&&dnd_draw_live()==0&&dnd_fs_open_handles()==0&&dnd_aram_stat(1)==0);
-#ifdef HYPERCUBE_WORLD_RUNTIME
+#ifdef HYPERCUBE_MODEL_RUNTIME
+    assert(texture_host_draws>0&&texture_host_publishes==2);
+#elif defined(HYPERCUBE_TAIL_RUNTIME)
+    assert(texture_host_draws>0&&texture_host_waits==3);
+#elif defined(HYPERCUBE_WORLD_RUNTIME)
     assert(texture_host_draws>5&&texture_host_publishes>=2);
 #else
     assert(texture_host_draws>100&&texture_host_publishes>=8);

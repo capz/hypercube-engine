@@ -78,4 +78,29 @@ for(int i=0;i<100;i++)
     Check(!scheduler.Complete(upgrade,generation,true,i*30),"Stale generation never publishes");
     Check(scheduler.State(slot)==ResourceState.Resident&&scheduler.ResidentBytes==catalog.Get(coarse).Length,"Churn preserves fallback ownership");
 }
-Console.WriteLine("Texture families: v2/CRC/sparse/pair/gutters/shared demand/density/hysteresis/dwell/caps/fuzz PASS");
+var controller=new TextureBudgetController();
+Check(controller.Next(1000,0,0).UploadBytes==32768,"Budget starts bounded");
+Check(controller.Next(1000,1200,0).UploadBytes==16384,"Slow pump reduces chunk work");
+Check(!controller.Next(1000,100,12000).AllowPrefetch&&controller.ChunkBytes==8192,"Slow storage reduces speculative work");
+Check(controller.Next(1000,100,100,audioStarved:true).UploadBytes==0,"Audio pressure pauses issuance");
+Check(controller.Next(1000,100,100,criticalQueued:1).UploadBytes==0,"Gameplay pressure pauses issuance");
+Check(controller.Next(7999,100,100).UploadBytes==0,"Insufficient CPU headroom pauses issuance");
+TextureWorkBudget budget=default;
+for(int i=0;i<32;i++)budget=controller.Next(1000,100,100);
+Check(budget.UploadBytes==32768&&budget.AllowPrefetch&&controller.Growths==2,"Stable headroom recovers gradually within cap");
+var hint=new TexturePrefetchHint(.9f,.5f,.8f,128);
+Check(TexturePrefetchPolicy.Likely(hint,budget,65536,1024),"Likely near-future visible content may prefetch");
+Check(!TexturePrefetchPolicy.Likely(new TexturePrefetchHint(.1f,.5f,.8f,128),budget,65536,1024),"Unlikely content does not prefetch");
+Check(!TexturePrefetchPolicy.Likely(hint,budget,1024,1024),"Prefetch preserves memory headroom");
+Check(!TexturePrefetchPolicy.Likely(hint,new TextureWorkBudget(0,1),65536,1024),"Paused work cannot speculate");
+var tailHeader=new byte[32];
+void TailWord(int at,int value)=>BitConverter.GetBytes(value).CopyTo(tailHeader,at);
+TailWord(0,0x58544e44);TailWord(4,2);TailWord(8,6);TailWord(12,16);TailWord(16,8);TailWord(20,832);TailWord(24,5);
+var tailInfo=ResidentMipTailInfo.Read(tailHeader,864);Check(tailInfo.NativeBytes==832&&tailInfo.Levels==5,"Bounded rectangular contiguous tail");
+foreach(int at in new[]{0,4,8,12,16,20,24,28})
+{
+    var bad=(byte[])tailHeader.Clone();bad[at]^=128;
+    try{ResidentMipTailInfo.Read(bad,864);throw new Exception("Invalid mip tail accepted");}catch(IOException){}
+}
+try{ResidentMipTailInfo.Read(tailHeader,864,maximumNativeBytes:512);throw new Exception("Tail byte ceiling ignored");}catch(IOException){}
+Console.WriteLine("Texture families: v2/CRC/sparse/pair/gutters/shared demand/density/hysteresis/dwell/caps/fuzz/budgets/prefetch PASS");

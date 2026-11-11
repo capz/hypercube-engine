@@ -30,6 +30,8 @@ public sealed class AramCache : IDisposable
     }
     public int Trim()
     {int before=Bytes;for(int i=1;i<buffers.Length;i++)Drop(i);return before-Bytes;}
+    public int TrimExcept(int protectedRecord)
+    {int before=Bytes;if(protectedRecord>0&&Bytes==(buffers[protectedRecord]?.Length??0))return 0;for(int i=1;i<buffers.Length;i++)if(i!=protectedRecord)Drop(i);return before-Bytes;}
     public Task Fetch(int id,NativeBuffer target,int targetOffset,int bytes)
         =>FetchRange(id,0,target,targetOffset,bytes);
     public Task FetchRange(int id,int sourceOffset,NativeBuffer target,int targetOffset,int bytes)

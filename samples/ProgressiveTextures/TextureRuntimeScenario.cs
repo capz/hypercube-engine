@@ -99,7 +99,7 @@ internal sealed class TextureRuntimeScenario : IDisposable
                 int active=0;for(int i=0;i<bindings.Length;i++)active+=source.Catalog.Get(bindings[i].Family.GetLevel(textures.ResidentIndex(i+1)).RecordId).Length;
                 Check(textures.ActiveBytes==active,"Active residency is not exactly one image per family.");
                 Check(textures.Cold.Bytes>0,"ARAM retention did not retain cold copies.");
-                textures.StrictReleaseColdCopies=true;Next(7);
+                textures.SetColdRetention(TextureColdRetention.StrictRelease);Next(7);
             }
             else if(phase==8&&textures.Deferred>0&&frame-phaseFrame>=60)
             {Check(textures.ResidentIndex(1)==bindings[0].Family.CoarseIndex,"Pressure evicted coarse to start a promotion.");Next(9);}
