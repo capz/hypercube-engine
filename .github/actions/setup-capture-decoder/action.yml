@@ -1,0 +1,13 @@
+name: Set up capture decoder
+description: Install a pinned FFmpeg binary for host capture tests without system package mirrors.
+runs:
+  using: composite
+  steps:
+    - name: Install FFmpeg binary wheel
+      shell: bash
+      run: |
+        python3 -m pip install --disable-pip-version-check --only-binary=:all: --no-deps imageio-ffmpeg==0.6.0
+        decoder_bin="$RUNNER_TEMP/hypercube-ffmpeg-bin"
+        mkdir -p "$decoder_bin"
+        ln -sf "$(python3 -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')" "$decoder_bin/ffmpeg"
+        echo "$decoder_bin" >> "$GITHUB_PATH"

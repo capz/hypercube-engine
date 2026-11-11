@@ -32,9 +32,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install capture decoder for host tests
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
+        uses: ./.github/actions/setup-capture-decoder
       - name: Test ordered mesh pass contracts
         run: dotnet run --project tests/OrderedMeshPasses.Tests -c Release
       - name: Build and test packed assets, scheduler and GameCube executable
