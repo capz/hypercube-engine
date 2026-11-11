@@ -129,7 +129,7 @@ public sealed class AssetCatalog
             for(int k=44;k<64;k++)if(header[k]!=0)throw new IOException("Unknown HCPK v2 flags.");
             families=TextureFamilyReader.Read(this,index,Count*64,Binary.I32(header,32));
         }
-        else families=Array.Empty<TextureFamily>();
+        else families=new TextureFamily[0];
     }
     public void ValidateId(int id)
     {
