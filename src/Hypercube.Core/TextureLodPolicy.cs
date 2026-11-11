@@ -58,7 +58,9 @@ public static class TextureLodSelector
             int previous=binding.Previous;
             if(previous>=0&&selected!=previous)
             {
-                float boundary=(family.GetLevel(previous).LogicalLevel+family.GetLevel(selected).LogicalLevel)*.5f;
+                // Sparse ladders switch when rounding reaches the coarser
+                // exponent, not halfway across the missing authored levels.
+                float boundary=family.GetLevel(selected<previous?previous:selected).LogicalLevel-.5f;
                 float band=(float)(Math.Log(1+hysteresis)/Math.Log(2));
                 if(frame-binding.ChangedFrame<minimumDwellFrames||selected<previous&&raw>=boundary-band||selected>previous&&raw<=boundary+band)selected=previous;
             }

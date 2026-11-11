@@ -42,7 +42,7 @@ public sealed class TextureFamily
 
 internal static class TextureFamilyReader
 {
-    private static float Float(byte[] data,int at)=>BitConverter.Int32BitsToSingle(Binary.I32(data,at));
+    private static float Float(byte[] data,int at)=>Binary.F32(data,at);
     private static bool Finite(float x)=>!float.IsNaN(x)&&!float.IsInfinity(x);
     internal static int NativeBytes(int w,int h,int format)
     {if(w<1||h<1||w>1024||h>1024)return -1;return format==6?((w+3)/4)*((h+3)/4)*64:format==14?((w+7)/8)*((h+7)/8)*32:-1;}

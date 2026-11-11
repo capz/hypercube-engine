@@ -10,6 +10,17 @@ public static class Binary
     public static int I32(byte[] data, int at) => unchecked((int)U32(data, at));
     public static int U16(byte[] data, int at) => data[at] | data[at + 1] << 8;
     public static int I16(byte[] data, int at) => (short)U16(data, at);
+    // Exact finite IEEE754 decoding using arithmetic supported by older AOT
+    // SDKs as well as the CLR. Core retains no SDK or unsafe-code dependency.
+    public static float F32(byte[] data,int at)
+    {
+        uint bits=U32(data,at),fraction=bits&0x7fffffu;int exponent=(int)((bits>>23)&255);bool negative=(bits&0x80000000u)!=0;
+        if(exponent==255)return fraction!=0?float.NaN:negative?float.NegativeInfinity:float.PositiveInfinity;
+        float value=fraction/8388608f;
+        if(exponent==0)exponent=-126;else{value+=1;exponent-=127;}
+        while(exponent<0){value*=.5f;exponent++;}while(exponent>0){value*=2;exponent--;}
+        return negative?-value:value;
+    }
     public static uint Crc(byte[] data, int at, int count, uint initial = 0)
     {
         uint crc = ~initial;

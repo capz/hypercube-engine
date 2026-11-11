@@ -37,12 +37,21 @@ Check(Math.Abs(projected.PixelsU-projected.PixelsV)<.001,"Both axes and repeats"
 Check(TextureFootprint.Project(2,2,20,10,60,480).PixelsU>TextureFootprint.Project(2,2,20,0,60,480).PixelsU,"Nearest bound is conservative");
 var stable=new StreamedMaterialTexture(rgba);Check(TextureLodSelector.Select(stable,new TextureFootprint(128,64),0)==1,"Projected sparse level");
 for(int frame=1;frame<100;frame++)Check(TextureLodSelector.Select(stable,new TextureFootprint(frame%2==0?180:182,90),frame)==1,"Hysteresis suppresses oscillation");
+Check(TextureLodSelector.Select(stable,new TextureFootprint(240,120),100)==0,"Sparse hysteresis uses the actual density transition plus 25 percent");
 Check(TextureLodSelector.Select(stable,new TextureFootprint(1000,1000),100)==0,"Promotion can skip levels");
 Check(TextureLodSelector.Select(stable,new TextureFootprint(1,1),101)==0,"Minimum dwell");
 Check(TextureLodSelector.Select(stable,new TextureFootprint(1,1),110)==rgba.CoarseIndex,"Settled demotion");
 stable.MinimumLogicalLevel=2;stable.Policy=TextureQualityPolicy.FullQuality;
 Check(TextureLodSelector.Select(stable,default,120)==1,"Explicit quality cap");
-var random=new Random(831);for(int trial=0;trial<2000;trial++)
+var random=new Random(831);
+foreach(uint bits in new uint[]{0,0x80000000,1,0x007fffff,0x00800000,0x3f800000,0x7f7fffff,0x7f800000,0xff800000,0x7fc00000})CheckFloat(bits);
+for(int i=0;i<10000;i++)CheckFloat((uint)random.Next()|(random.Next(2)==0?0:0x80000000u));
+void CheckFloat(uint bits)
+{
+    float decoded=Binary.F32(BitConverter.GetBytes(bits),0),expected=BitConverter.Int32BitsToSingle(unchecked((int)bits));
+    Check(float.IsNaN(expected)?float.IsNaN(decoded):BitConverter.SingleToInt32Bits(decoded)==unchecked((int)bits),"Portable float metadata decoding preserves IEEE finite bits, signed zero and infinity");
+}
+for(int trial=0;trial<2000;trial++)
 {
     var bad=(byte[])table.Clone();bad[random.Next(bad.Length)]^=(byte)random.Next(1,256);
     try{new AssetCatalog(header,bad,raw.Length);throw new Exception("Corrupt metadata accepted");}catch(IOException){}
