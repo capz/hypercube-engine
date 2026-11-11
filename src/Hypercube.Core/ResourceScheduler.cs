@@ -9,7 +9,7 @@ public enum ResourcePriority { Gameplay, Coarse, Visible, Prefetch, Optional }
 // the adapter, which supplies fence completion and observes every issued read.
 public sealed class ResourceScheduler
 {
-    private readonly int[] ids, priorities, generations, retries, references, pins, touched, fences;
+    private readonly int[] ids, priorities, generations, retries, references, pins, touched, fences, importance;
     private readonly ResourceState[] states;
     private readonly int[] lookup;
     private readonly uint[] freeMasks;
@@ -27,6 +27,7 @@ public sealed class ResourceScheduler
         ids = new int[capacity]; priorities = new int[capacity]; generations = new int[capacity];
         retries = new int[capacity]; references = new int[capacity]; pins = new int[capacity]; touched = new int[capacity];
         states = new ResourceState[capacity]; fences = new int[capacity]; lookup = new int[catalog.Count+1];
+        importance=new int[capacity];
         for(int i=0;i<lookup.Length;i++)lookup[i]=-1;
         freeMasks=new uint[(capacity+31)/32];
         for(int i=0;i<capacity;i++)freeMasks[i>>5]|=1u<<(i&31);
@@ -55,12 +56,13 @@ public sealed class ResourceScheduler
         return -1;
     }
     private void Missing(int slot){states[slot]=ResourceState.Missing;freeMasks[slot>>5]|=1u<<(slot&31);}
-    public int Demand(int id, ResourcePriority priority)
+    public int Demand(int id, ResourcePriority priority,int projectedError=0)
     {
         if(ValidateIdsOnly)catalog.ValidateId(id);else catalog.Get(id);
         int found = Find(id);
         if (found >= 0)
         {
+            importance[found]=references[found]==0?projectedError:Math.Max(importance[found],projectedError);
             if (references[found] == 0 || (int)priority < priorities[found]) priorities[found] = (int)priority;
             references[found]++;
             if(states[found]==ResourceState.Resident)touched[found]=++order;
@@ -77,6 +79,7 @@ public sealed class ResourceScheduler
             ids[i] = id; lookup[id]=i; states[i] = ResourceState.Queued; priorities[i] = (int)priority;
             freeMasks[i>>5]&=~(1u<<(i&31));
             references[i] = 1; touched[i] = ++order; generations[i] = nextGeneration++;
+            importance[i]=projectedError;
             retries[i] = 0; return i;
         }
         Rejected++; return -1;
@@ -103,13 +106,31 @@ public sealed class ResourceScheduler
     }
     // Records must be adjacent/near-adjacent in the pack. One logical read can
     // satisfy several independently resident pages, regardless of draw size.
-    public int BeginBatch(int now, int maxBytes, int maxRecords, int[] slots, out int offset, out int length)
+    private bool Earlier(int a,int b)=>b<0||priorities[a]<priorities[b]||priorities[a]==priorities[b]&&
+        (importance[a]>importance[b]||importance[a]==importance[b]&&touched[a]<touched[b]);
+    public int NextQueued(int now,int excludedKind=0)
+    {
+        int first=-1;
+        for(int i=0;i<ids.Length;i++)if((states[i]==ResourceState.Queued||states[i]==ResourceState.Failed)&&references[i]>0&&retries[i]<=now&&
+            catalog.Get(ids[i]).Kind!=excludedKind&&Earlier(i,first))first=i;
+        return first;
+    }
+    public void BeginRecord(int slot,int now)
+    {
+        if((states[slot]!=ResourceState.Queued&&states[slot]!=ResourceState.Failed)||references[slot]==0||retries[slot]>now)throw new InvalidOperationException("Resource is not eligible for a read.");
+        states[slot]=ResourceState.Reading;
+    }
+    public void RetireResident(int slot)
+    {
+        if(states[slot]!=ResourceState.Resident)throw new InvalidOperationException("Resource is not resident.");
+        ResidentBytes-=pins[slot];pins[slot]=0;references[slot]=0;states[slot]=ResourceState.Retiring;generations[slot]=nextGeneration++;Evicted++;
+    }
+    public int BeginBatch(int now, int maxBytes, int maxRecords, int[] slots, out int offset, out int length,int excludedKind=0)
     {
         if (maxBytes < 32 || maxRecords < 1 || maxRecords > slots.Length) throw new ArgumentOutOfRangeException("maxBytes");
         offset = length = 0; int first = -1;
         for (int i = 0; i < ids.Length; i++) if ((states[i] == ResourceState.Queued || states[i] == ResourceState.Failed) &&
-            references[i] > 0 && retries[i] <= now && catalog.Get(ids[i]).Length <= maxBytes &&
-            (first < 0 || priorities[i] < priorities[first] || priorities[i] == priorities[first] && touched[i] < touched[first])) first = i;
+            references[i] > 0 && retries[i] <= now && catalog.Get(ids[i]).Kind!=excludedKind&&catalog.Get(ids[i]).Length <= maxBytes && Earlier(i,first)) first = i;
         if (first < 0) return 0;
         var initial = catalog.Get(ids[first]); offset = initial.Offset; length = initial.Length;
         slots[0] = first; states[first] = ResourceState.Reading; int count = 1;
@@ -118,7 +139,7 @@ public sealed class ResourceScheduler
         {
             int next = -1, end = offset + length;
             for (int i = 0; i < ids.Length; i++) if ((states[i] == ResourceState.Queued || states[i] == ResourceState.Failed) &&
-                references[i] > 0 && retries[i] <= now && priorities[i] <= priorities[first])
+                references[i] > 0 && retries[i] <= now && priorities[i] <= priorities[first]&&catalog.Get(ids[i]).Kind!=excludedKind)
             {
                 var r = catalog.Get(ids[i]);
                 if (r.Offset >= end && r.Offset - end <= 32 && r.Length <= maxBytes - (r.Offset - offset) &&
@@ -130,12 +151,11 @@ public sealed class ResourceScheduler
         }
         return count;
     }
-    public int RequiredBatchBytes(int now,int configured)
+    public int RequiredBatchBytes(int now,int configured,int excludedKind=0)
     {
         int first=-1;
         for(int i=0;i<ids.Length;i++)if((states[i]==ResourceState.Queued||states[i]==ResourceState.Failed)&&
-            references[i]>0&&retries[i]<=now&&(first<0||priorities[i]<priorities[first]||
-            priorities[i]==priorities[first]&&touched[i]<touched[first]))first=i;
+            references[i]>0&&retries[i]<=now&&catalog.Get(ids[i]).Kind!=excludedKind&&Earlier(i,first))first=i;
         if(first<0)return configured;
         int bytes=catalog.Get(ids[first]).Length;
         return bytes>configured?bytes:configured;

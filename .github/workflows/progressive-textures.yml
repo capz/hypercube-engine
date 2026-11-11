@@ -5,8 +5,16 @@ permissions:
 jobs:
   contracts:
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - id: sdk
+        run: echo "revision=$(cat .sdk-revision)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: capz/DolphinDotNet
+          ref: ${{ steps.sdk.outputs.revision }}
+          path: vendor/sdk
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
@@ -14,6 +22,44 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 tests/progressive_fixtures.py
-      - run: python3 -m unittest discover -s tests -p test_progressive_textures.py
+      - run: python3 -m unittest discover -s tests -p 'test_progressive*.py'
       - run: dotnet run --project tests/TextureFamilies.Tests -c Debug
       - run: dotnet run --project tests/TextureFamilies.Tests -c Release
+      - run: python3 tools/test_progressive_runtime.py
+  dolphin:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - id: sdk
+        run: echo "revision=$(cat .sdk-revision)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: capz/DolphinDotNet
+          ref: ${{ steps.sdk.outputs.revision }}
+          path: vendor/sdk
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: tools/build_progressive.sh
+        env:
+          CONFIGURATION: ${{ matrix.configuration }}
+      - run: docker build -t hypercube-progressive -f tools/Dockerfile.dolphin .
+      - run: >-
+          docker run --rm --init --shm-size=1g
+          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-progressive
+          python3 tools/progressive_validation.py out/native-progressive-${{ matrix.configuration }}/Game.dol
+          --disc out/progressive/textures.iso --logs out/dolphin-progressive-${{ matrix.configuration }} --seconds 60
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: progressive-${{ matrix.configuration }}
+          path: |
+            out/dolphin-progressive-${{ matrix.configuration }}/results.json
+            out/dolphin-progressive-${{ matrix.configuration }}/states.json
+            out/dolphin-progressive-${{ matrix.configuration }}/*.png
+            out/dolphin-progressive-${{ matrix.configuration }}/*.log

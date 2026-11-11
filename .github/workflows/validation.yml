@@ -18,10 +18,12 @@ jobs:
         configuration: [Debug, Release]
     steps:
       - uses: actions/checkout@v4
+      - id: sdk
+        run: echo "revision=$(cat .sdk-revision)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           repository: capz/DolphinDotNet
-          ref: f5dbd0a69c762708875890b5be73116f64589e4b
+          ref: ${{ steps.sdk.outputs.revision }}
           path: vendor/sdk
       - uses: actions/setup-dotnet@v4
         with:

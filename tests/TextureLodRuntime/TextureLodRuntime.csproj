@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType></PropertyGroup><ItemGroup><ProjectReference Include="../../src/Hypercube.GameCube/Hypercube.GameCube.csproj" /><Compile Include="../../samples/ProgressiveTextures/TextureRuntimeScenario.cs" Link="TextureRuntimeScenario.cs" /></ItemGroup></Project>
