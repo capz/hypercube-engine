@@ -2,7 +2,7 @@
   <PropertyGroup>
     <DndBuildNative Condition="'$(DndBuildNative)' == ''">false</DndBuildNative>
     <IsPackable>false</IsPackable>
-    <DolphinDotNetPackageVersion>0.1.0-preview.302.1</DolphinDotNetPackageVersion>
+    <DolphinDotNetPackageVersion>0.1.0-preview.305.1</DolphinDotNetPackageVersion>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
