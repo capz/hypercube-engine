@@ -3,8 +3,8 @@ namespace Hypercube.GameCube;
 
 /// <summary>Ordered color/UV variants of borrowed, uniform-color geometry.
 /// Configure between frames. Transparent passes keep their authored order.
-/// Set HypercubeNativePasses=true when building against the source SDK that
-/// provides MeshPasses to replay cached indices with one native call.</summary>
+/// SDK MeshPasses replays cached indices with one native call by default.
+/// HypercubeNativePasses=false retains the portable comparison path.</summary>
 public sealed class OrderedMeshPasses
 {
 #if HYPERCUBE_NATIVE_PASSES

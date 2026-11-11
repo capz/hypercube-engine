@@ -1,4 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
- <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+ <PropertyGroup><OutputType>Exe</OutputType>
+  <DefineConstants Condition="'$(HypercubeNativePasses)' == 'true'">$(DefineConstants);HYPERCUBE_NATIVE_PASSES</DefineConstants>
+ </PropertyGroup>
  <ItemGroup><Compile Include="../../src/Hypercube.GameCube/OrderedMeshPasses.cs" Link="OrderedMeshPasses.cs" /></ItemGroup>
 </Project>

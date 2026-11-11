@@ -57,6 +57,20 @@ class Program {static void Main(){var q=new OpaqueDrawQueue(2);q.TryAdd(1,2,0xff
         compiler=work/'packages/dolphindotnet.sdk'/sdk/'tools/compiler/DolphinDotNet.Compiler.dll'
         run('dotnet',str(compiler),'--bundle',str(app/'bin/Release/net8.0/GameCube.dll'),str(work/'native-consumer'))
         if not (work/'native-consumer/source/generated_program.c').is_file():raise AssertionError('No consumer AOT bundle')
+        # Exercise the distributed default backend, rather than only compiling
+        # the stubbed contract test or the source-checkout adapter.
+        ordered=work/'Ordered';ordered.mkdir()
+        (ordered/'Ordered.csproj').write_text((app/'GameCube.csproj').read_text())
+        (ordered/'Program.cs').write_text('''using Dolphin.Graphics;using Hypercube.GameCube;
+var vertices=new[]{new VertexPositionColorTexture(new Vector3(0,0,0),Color32.White,Vector2.Zero),new VertexPositionColorTexture(new Vector3(1,0,0),Color32.White,Vector2.Zero),new VertexPositionColorTexture(new Vector3(0,1,0),Color32.White,Vector2.Zero)};
+using var mesh=Mesh.Create(vertices);using var texture=Texture2D.CreateNative(8,8,NativeTextureFormat.I8);
+var passes=new OrderedMeshPasses(mesh,2);passes.Set(0,Color32.White,new UvTransform(Vector2.Zero,new Vector2(1,1)));
+var renderer=new Renderer();var device=GraphicsDevice.Default;device.BeginFrame(Color32.Black);renderer.Begin3D(new Camera(60,4f/3,.1f,100));passes.Draw(renderer,new Material{Texture=texture},new Transform());renderer.End3D();device.EndFrame();
+''')
+        run('dotnet','build',str(ordered),'-c','Release','-p:DndBuildNative=false')
+        run('dotnet',str(compiler),'--bundle',str(ordered/'bin/Release/net8.0/Ordered.dll'),str(work/'native-ordered'))
+        if 'dnd_mesh_draw_passes(' not in (work/'native-ordered/source/generated_program.c').read_text():
+            raise AssertionError('Published engine did not select SDK native ordered passes')
         if args.native:
             run('dotnet','build',str(app),'-c','Release','-p:DndBuildBackend=Docker')
             if not list(app.rglob('*.dol')) or not list(app.rglob('*.elf')):raise AssertionError('No external native executable')

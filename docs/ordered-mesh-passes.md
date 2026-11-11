@@ -13,12 +13,12 @@ a private working material during construction, so even a caller material with
 untouched lazy sampler/UV state cannot allocate in the first draw. The mesh and texture remain owned
 by the caller and must remain alive through the draw.
 
-The published-SDK build uses the ordered portable loop. With the source SDK PR
-that adds `MeshPasses`, build `Hypercube.GameCube` with
-`-p:HypercubeNativePasses=true` and `-p:DolphinDotNetRoot=/path/to/sdk`.
-That path stores variants once, prepares an aligned POS/UV index command list
+The published package uses SDK 315's native `MeshPasses` backend by default.
+Source builds use the same SDK revision recorded in `.sdk-revision`.
+The backend stores variants once, prepares an aligned POS/UV index command list
 between frames, validates once per block and replays it natively. It saves CPU
 submission; it does not promise less GPU work. Neither path allocates during draw.
+Use `-p:HypercubeNativePasses=false` to build the portable comparison backend.
 
 ```csharp
 var blur = new OrderedMeshPasses(panelMesh, 81);
@@ -30,7 +30,8 @@ blur.Draw(renderer, backdropMaterial, identity);
 
 Run `dotnet run --project tests/OrderedMeshPasses.Tests -c Release` for portable
 ordering, validation, exceptional state restoration and allocation checks.
-The source-SDK backend is also exercised by the real VideoMode integration DOL:
+Run the same test with `-p:HypercubeNativePasses=false` for the portable backend.
+The native backend is also exercised by the real VideoMode integration DOL:
 
 ```
 python3 ci/build_videomode_source_sdk.py --sdk /path/to/DolphinDotNet \
