@@ -24,6 +24,7 @@ public static class Binary
 
 public readonly struct AssetRecord
 {
+    public int Height => Kind==6?Useful:Width;
     public readonly int Id, Kind, Offset, Length, Format, Group, Mip, Cell, Parent, Width, Useful, Material, Variant;
     public readonly uint Checksum;
     internal AssetRecord(byte[] index, int at)
@@ -40,6 +41,20 @@ public readonly struct AssetRecord
 
 public sealed class AssetCatalog
 {
+    private readonly TextureFamily[] families;
+    public int Version {get;}
+    public int FamilyCount=>families.Length;
+    public TextureFamily Family(int id){if(id<1||id>FamilyCount)throw new ArgumentOutOfRangeException("id");return families[id-1];}
+    public TextureFamily Family(string name){for(int i=0;i<FamilyCount;i++)if(families[i].Name==name)return families[i];throw new ArgumentException("Unknown texture family: "+name);}
+    public static int MetadataBytes(byte[] header)
+    {
+        if(header.Length<32||Binary.U32(header,0)!=0x4b504348)throw new IOException("Invalid pack header.");
+        int version=Binary.I32(header,4),count=Binary.I32(header,8);
+        if(count<1||count>4096||(version!=1&&version!=2)||header.Length!=(version==1?32:64))throw new IOException("Unsupported pack version or index size.");
+        int extra=version==2?Binary.I32(header,40):0;
+        if(extra<0||extra>65536)throw new IOException("Family metadata exceeds its bound.");
+        return count*64+extra;
+    }
     private readonly AssetRecord[] records;
     private readonly int[] textures = new int[576], collisions = new int[24], meshHeads = new int[96], patchHeads = new int[85];
     private readonly int[] next;
@@ -48,12 +63,12 @@ public sealed class AssetCatalog
     public int DataOffset { get; }
     public AssetCatalog(byte[] header, byte[] index, long actualLength)
     {
-        if (header.Length != 32 || Binary.U32(header, 0) != 0x4b504348 || Binary.U32(header, 4) != 1 ||
-            Binary.U32(header, 12) != 32 || Binary.U32(header, 28) != 0)
+        int metadataBytes=MetadataBytes(header);Version=Binary.I32(header,4);
+        if (Binary.U32(header, 12) != header.Length || Binary.U32(header, 28) != 0)
             throw new IOException("Unsupported Hypercube pack header.");
         Count = Binary.I32(header, 8); DataOffset = Binary.I32(header, 16); Length = Binary.I32(header, 20);
-        if (Count <= 0 || Count > 4096 || index.Length != Count * 64 ||
-            DataOffset < 32 + index.Length || (DataOffset & 31) != 0 || Length != actualLength || DataOffset > Length ||
+        if (index.Length != metadataBytes ||
+            DataOffset < header.Length + index.Length || (DataOffset & 31) != 0 || Length != actualLength || DataOffset > Length ||
             Binary.Crc(index, 0, index.Length) != Binary.U32(header, 24))
             throw new IOException("Invalid pack index bounds or checksum.");
         records = new AssetRecord[Count];
@@ -63,7 +78,7 @@ public sealed class AssetCatalog
         for (int i = 1; i <= Count; i++)
         {
             var r = Get(i);
-            if (r.Id != i || r.Kind < 1 || r.Kind > 5 || r.Offset < end || (r.Offset & 31) != 0 ||
+            if (r.Id != i || r.Kind < 1 || r.Kind > (Version==1?5:6) || r.Offset < end || (r.Offset & 31) != 0 ||
                 r.Length <= 0 || r.Length > Length - r.Offset || r.Parent < 0 || r.Parent > Count ||
                 Binary.U32(index, (i - 1) * 64 + 56) != 0 || Binary.U32(index, (i - 1) * 64 + 60) != 0)
                 throw new IOException("Invalid asset record range, order or dependency.");
@@ -75,6 +90,8 @@ public sealed class AssetCatalog
                     r.Useful + 8 > r.Width || r.Length != expected)
                     throw new IOException("Invalid native texture descriptor.");
             }
+            if(r.Kind==6&&(TextureFamilyReader.NativeBytes(r.Width,r.Height,r.Format)!=r.Length||r.Cell!=0||r.Material!=0||r.Variant!=0))
+                throw new IOException("Invalid generic native texture record.");
             end = r.Offset + r.Length;
             if (r.Kind == 1)
                 {
@@ -99,13 +116,20 @@ public sealed class AssetCatalog
         for (int i = 1; i <= Count; i++)
         {
             var r = Get(i);
-            if (r.Parent != 0)
+            if (r.Parent != 0 && r.Kind!=6)
             {
                 var p = Get(r.Parent);
                 if (r.Kind != 1 || p.Kind != 1 || p.Group != r.Group || p.Cell != r.Cell ||
                     p.Format != r.Format || p.Mip != r.Mip + 1) throw new IOException("Invalid fallback hierarchy.");
             }
         }
+        if(Version==2)
+        {
+            if(Binary.I32(header,36)!=64+Count*64)throw new IOException("Invalid family index offset.");
+            for(int k=44;k<64;k++)if(header[k]!=0)throw new IOException("Unknown HCPK v2 flags.");
+            families=TextureFamilyReader.Read(this,index,Count*64,Binary.I32(header,32));
+        }
+        else families=Array.Empty<TextureFamily>();
     }
     public void ValidateId(int id)
     {
