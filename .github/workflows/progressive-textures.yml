@@ -1,10 +1,19 @@
 name: Progressive texture contracts
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  changes:
+    uses: ./.github/workflows/ci-selection.yml
   contracts:
+    needs: changes
+    if: needs.changes.outputs.families == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -14,6 +23,5 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 tests/progressive_fixtures.py
-      - run: python3 -m unittest discover -s tests -p test_progressive_textures.py
       - run: dotnet run --project tests/TextureFamilies.Tests -c Debug
       - run: dotnet run --project tests/TextureFamilies.Tests -c Release

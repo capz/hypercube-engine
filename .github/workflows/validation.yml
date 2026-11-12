@@ -1,6 +1,7 @@
 name: Packed scene in Dolphin
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 concurrency:
@@ -9,19 +10,43 @@ concurrency:
 permissions:
   contents: read
 jobs:
-  validation:
+  changes:
+    uses: ./.github/workflows/ci-selection.yml
+
+  host:
+    name: host checks
+    needs: changes
+    if: needs.changes.outputs.host == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 tools/test_host.py
+
+  baseline-validation:
+    name: baseline validation (${{ matrix.configuration }})
+    needs: [changes, host]
+    if: needs.changes.outputs.scene == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         configuration: [Debug, Release]
     steps:
       - uses: actions/checkout@v4
+      - id: sdk
+        run: echo "revision=$(cat .sdk-revision)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           repository: capz/DolphinDotNet
-          ref: efda89f3e1ad50fe4cac20124ad8a89f75b1c002
+          ref: ${{ steps.sdk.outputs.revision }}
           path: vendor/sdk
       - uses: actions/setup-dotnet@v4
         with:
@@ -29,14 +54,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Test ordered mesh pass contracts
-        run: |
-          dotnet run --project tests/OrderedMeshPasses.Tests -c Release
-          dotnet run --project tests/OrderedMeshPasses.Tests -c Release -p:HypercubeNativePasses=false
-      - name: Build and test packed assets, scheduler and GameCube executable
+      - name: Build packed assets and GameCube executable
         env:
           CONFIGURATION: ${{ matrix.configuration }}
           FIXTURE_RESOLUTION: '48'
+          HYPERCUBE_SKIP_HOST_TESTS: '1'
         run: tools/build_validation.sh
       - name: Verify native resource API ranges and checksums
         run: |
@@ -45,74 +67,12 @@ jobs:
           vendor/sdk/tests/native_buffer_crc_test
       - name: Build Dolphin validation container
         run: docker build -t hypercube-dolphin -f tools/Dockerfile.dolphin .
-      - name: Build shared rendering integration sample
-        env:
-          CONFIGURATION: ${{ matrix.configuration }}
-        run: tools/build_rendering.sh
-      - name: Validate bounded rendering, dirty uploads and cover states in Dolphin
-        run: >-
-          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
-          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
-          python3 tools/rendering_validation.py out/native-rendering-${{ matrix.configuration }}/Game.dol
-          --logs out/dolphin-rendering-${{ matrix.configuration }} --seconds 35
       - name: Boot the DOL and run all eleven scene comparisons
         run: >-
           docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
           --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
           python3 tools/dolphin_validation.py out/native-${{ matrix.configuration }}/Game.dol
           --disc out/assets/world.iso --logs out/dolphin-${{ matrix.configuration }} --seconds 240
-      - name: Build performance comparison executable
-        if: matrix.configuration == 'Release'
-        env:
-          PERFORMANCE_SUITE: '1'
-        run: tools/build_validation.sh
-      - name: Run nine performance comparisons and progress checks
-        if: matrix.configuration == 'Release'
-        run: >-
-          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
-          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
-          python3 tools/dolphin_validation.py out/native-performance-Release/Game.dol
-          --suite performance --disc out/assets/world.iso
-          --logs out/dolphin-performance-Release --seconds 240
-      - name: Build frame-phase profiling executable
-        if: matrix.configuration == 'Release'
-        env:
-          PROFILING_SUITE: '1'
-        run: tools/build_validation.sh
-      - name: Run sixteen engine/SDK throughput comparisons
-        if: matrix.configuration == 'Release'
-        run: >-
-          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
-          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
-          python3 tools/dolphin_validation.py out/native-profiling-Release/Game.dol
-          --suite profiling --disc out/assets/world.iso
-          --logs out/dolphin-profiling-Release --seconds 360
-      - name: Build SDK follow-up profiling executable
-        if: matrix.configuration == 'Release'
-        env:
-          SDK_FOLLOWUP_SUITE: '1'
-        run: tools/build_validation.sh
-      - name: Run sixteen SDK wait and direct-read comparisons
-        if: matrix.configuration == 'Release'
-        run: >-
-          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
-          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
-          python3 tools/dolphin_validation.py out/native-sdk-followup-Release/Game.dol
-          --suite sdk-followup --disc out/assets/world.iso
-          --logs out/dolphin-sdk-followup-Release --seconds 360
-      - name: Build texture follow-up profiling executable
-        if: matrix.configuration == 'Release'
-        env:
-          TEXTURE_FOLLOWUP_SUITE: '1'
-        run: tools/build_validation.sh
-      - name: Run sixteen clear, wait and aligned-read comparisons
-        if: matrix.configuration == 'Release'
-        run: >-
-          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
-          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
-          python3 tools/dolphin_validation.py out/native-texture-followup-Release/Game.dol
-          --suite texture-followup --disc out/assets/world.iso
-          --logs out/dolphin-texture-followup-Release --seconds 480
       - name: Upload executable, assets, measurements and rendered evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -130,3 +90,132 @@ jobs:
             out/dolphin-*/user/Logs/
             out/dolphin-*/user/Dump/Audio/
           retention-days: 14
+
+  rendering:
+    name: rendering (${{ matrix.configuration }})
+    needs: [changes, host]
+    if: needs.changes.outputs.rendering == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - id: sdk
+        run: echo "revision=$(cat .sdk-revision)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: capz/DolphinDotNet
+          ref: ${{ steps.sdk.outputs.revision }}
+          path: vendor/sdk
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build shared rendering integration sample
+        env:
+          CONFIGURATION: ${{ matrix.configuration }}
+        run: tools/build_rendering.sh
+      - name: Build Dolphin validation container
+        run: docker build -t hypercube-dolphin -f tools/Dockerfile.dolphin .
+      - name: Validate bounded rendering, dirty uploads and cover states in Dolphin
+        run: >-
+          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
+          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
+          python3 tools/rendering_validation.py out/native-rendering-${{ matrix.configuration }}/Game.dol
+          --logs out/dolphin-rendering-${{ matrix.configuration }} --seconds 35
+      - name: Upload executable, assets, measurements and rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hypercube-rendering-${{ matrix.configuration }}
+          path: |
+            out/native-*/Game.dol
+            out/native-*/Game.elf
+            out/assets/
+            out/dolphin-*/*.csv
+            out/dolphin-*/*.md
+            out/dolphin-*/*.json
+            out/dolphin-*/*.png
+            out/dolphin-*/*.log
+            out/dolphin-*/user/Logs/
+            out/dolphin-*/user/Dump/Audio/
+          retention-days: 14
+
+  release-comparisons:
+    name: release comparisons (${{ matrix.suite }})
+    needs: [changes, host]
+    if: needs.changes.outputs.compare == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.comparisons) }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: sdk
+        run: echo "revision=$(cat .sdk-revision)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: capz/DolphinDotNet
+          ref: ${{ steps.sdk.outputs.revision }}
+          path: vendor/sdk
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build Release comparison executable
+        env:
+          CONFIGURATION: Release
+          FIXTURE_RESOLUTION: '48'
+          HYPERCUBE_SKIP_HOST_TESTS: '1'
+        run: env "${{ matrix.build_flag }}=1" tools/build_validation.sh
+      - name: Build Dolphin validation container
+        run: docker build -t hypercube-dolphin -f tools/Dockerfile.dolphin .
+      - name: Run comparison and progress checks
+        run: >-
+          docker run --rm --init --shm-size=512m --user "$(id -u):$(id -g)"
+          --mount "type=bind,src=$PWD,dst=/work" -w /work hypercube-dolphin
+          python3 tools/dolphin_validation.py out/native-${{ matrix.suite }}-Release/Game.dol
+          --suite ${{ matrix.suite }} --disc out/assets/world.iso
+          --logs out/dolphin-${{ matrix.suite }}-Release --seconds ${{ matrix.seconds }}
+      - name: Upload executable, assets, measurements and rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hypercube-${{ matrix.suite }}-Release
+          path: |
+            out/native-*/Game.dol
+            out/native-*/Game.elf
+            out/assets/
+            out/dolphin-*/*.csv
+            out/dolphin-*/*.md
+            out/dolphin-*/*.json
+            out/dolphin-*/*.png
+            out/dolphin-*/*.log
+            out/dolphin-*/user/Logs/
+            out/dolphin-*/user/Dump/Audio/
+          retention-days: 14
+
+  validation:
+    name: validation (${{ matrix.configuration }})
+    needs: [changes, host, baseline-validation, rendering, release-comparisons]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require every selected lane and allow only intentional skips
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python3 tools/ci_changes.py --check-results

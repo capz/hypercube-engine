@@ -99,3 +99,7 @@ namespaces remain unchanged. Hypercube is licensed under GPL-2.0-only, matching
 DolphinDotNet. GameCube package builds require a compatible published SDK package.
 
 Ordered transparent color/UV variants are available through [ordered mesh passes](docs/ordered-mesh-passes.md), with a portable published-SDK path and an opt-in native replay backend.
+
+CI selects relevant checks from the whole PR diff and runs the full suite for
+shared or unknown changes. See [CI selection](docs/ci-selection.md) for routing,
+required-check behavior and forcing a full run.

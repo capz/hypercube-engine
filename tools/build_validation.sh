@@ -39,10 +39,15 @@ sdk_root="${DOLPHIN_DOTNET_ROOT:-$PWD/vendor/sdk}"
 if [[ ! -d "$sdk_root" && -d "$PWD/../DolphinDotNet" ]]; then sdk_root="$PWD/../DolphinDotNet"; fi
 sdk_root="$(cd "$sdk_root" && pwd)"
 mkdir -p out
-dotnet run --project tests/Hypercube.GameCube.Tests -c Release
+# CI runs these host checks once in its required host job. Local builds retain them.
+if [[ "${HYPERCUBE_SKIP_HOST_TESTS:-0}" != 1 ]]; then
+  dotnet run --project tests/Hypercube.GameCube.Tests -c Release
+fi
 python3 tools/build_assets.py --resolution "${FIXTURE_RESOLUTION:-48}"
-python3 -m unittest discover -s tests -p 'test_*.py'
-dotnet run --project tests/Hypercube.Tests -c "$configuration" -- out/assets/world.hcp
+if [[ "${HYPERCUBE_SKIP_HOST_TESTS:-0}" != 1 ]]; then
+  python3 -m unittest discover -s tests -p 'test_*.py'
+  dotnet run --project tests/Hypercube.Tests -c "$configuration" -- out/assets/world.hcp
+fi
 dotnet build "$sdk_root/tools/DolphinDotNet.Compiler" -c Release -m:1
 dotnet build samples/Validation/Validation.csproj -c "$configuration" -p:DndBuildNative=false -p:HypercubeCI=true -p:HypercubeOneMs="$execution" -p:HypercubePerformance="$performance" -p:HypercubeProfiling="$profiling" -p:HypercubeFollowup="$followup" -p:HypercubeTextureFollowup="$texture_followup" -p:DolphinDotNetRoot="$sdk_root" -m:1
 dotnet "$sdk_root/tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll" --bundle "samples/Validation/bin/$configuration/net8.0/Validation.dll" "$PWD/$native_output"

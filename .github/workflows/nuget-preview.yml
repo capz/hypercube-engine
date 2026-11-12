@@ -1,15 +1,9 @@
 name: NuGet preview
 on:
   pull_request:
-    paths:
-      - 'src/**'
-      - 'eng/**'
-      - 'tests/nuget_consumer.py'
-      - 'Directory.Build.props'
-      - 'LICENSE'
-      - '.github/workflows/nuget-preview.yml'
   push:
     tags: ['nuget-preview-*']
+    branches: [main]
   workflow_dispatch:
     inputs:
       publish:
@@ -19,7 +13,11 @@ on:
 permissions:
   contents: read
 jobs:
+  changes:
+    uses: ./.github/workflows/ci-selection.yml
   verify:
+    needs: changes
+    if: needs.changes.outputs.packages == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
