@@ -1,0 +1,43 @@
+name: Select relevant checks
+on:
+  workflow_call:
+    outputs:
+      host:
+        value: ${{ jobs.select.outputs.host }}
+      families:
+        value: ${{ jobs.select.outputs.families }}
+      rendering:
+        value: ${{ jobs.select.outputs.rendering }}
+      scene:
+        value: ${{ jobs.select.outputs.scene }}
+      packages:
+        value: ${{ jobs.select.outputs.packages }}
+      compare:
+        value: ${{ jobs.select.outputs.compare }}
+      comparisons:
+        value: ${{ jobs.select.outputs.comparisons }}
+      plan:
+        value: ${{ jobs.select.outputs.plan }}
+permissions:
+  contents: read
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      host: ${{ steps.select.outputs.host }}
+      families: ${{ steps.select.outputs.families }}
+      rendering: ${{ steps.select.outputs.rendering }}
+      scene: ${{ steps.select.outputs.scene }}
+      packages: ${{ steps.select.outputs.packages }}
+      compare: ${{ steps.select.outputs.compare }}
+      comparisons: ${{ steps.select.outputs.comparisons }}
+      plan: ${{ steps.select.outputs.plan }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Test selection and required-check gating
+        run: python3 -m unittest discover -s tests -p test_ci_changes.py
+      - id: select
+        run: python3 tools/ci_changes.py
