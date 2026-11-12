@@ -71,8 +71,17 @@ var renderer=new Renderer();var device=GraphicsDevice.Default;device.BeginFrame(
         run('dotnet',str(compiler),'--bundle',str(ordered/'bin/Release/net8.0/Ordered.dll'),str(work/'native-ordered'))
         if 'dnd_mesh_draw_passes(' not in (work/'native-ordered/source/generated_program.c').read_text():
             raise AssertionError('Published engine did not select SDK native ordered passes')
+        # Companion to AnimalTown #47: the engine's exact transitive SDK
+        # dependency must expose independent alpha and two-reference cutouts.
+        water=work/'Water';water.mkdir()
+        (water/'Water.csproj').write_text((app/'GameCube.csproj').read_text())
+        shutil.copy2(ROOT/'tests/fixtures/sdk_water_consumer.cs',water/'Program.cs')
+        run('dotnet','build',str(water),'-c','Release','-p:DndBuildNative=false','-warnaserror:NU1608')
+        run('dotnet',str(compiler),'--bundle',str(water/'bin/Release/net8.0/Water.dll'),str(work/'native-water'))
+        if not (work/'native-water/source/generated_program.c').is_file():raise AssertionError('No water alpha AOT bundle')
         if args.native:
-            run('dotnet','build',str(app),'-c','Release','-p:DndBuildBackend=Docker')
-            if not list(app.rglob('*.dol')) or not list(app.rglob('*.elf')):raise AssertionError('No external native executable')
+            for project in (app,water):
+                run('dotnet','build',str(project),'-c','Release','-p:DndBuildBackend=Docker')
+                if not list(project.rglob('*.dol')) or not list(project.rglob('*.elf')):raise AssertionError('No external native executable: '+project.name)
     print('External NuGet restore, dependency closure and consumer checks passed')
 if __name__=='__main__':main()

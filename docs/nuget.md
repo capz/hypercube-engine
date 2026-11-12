@@ -10,11 +10,25 @@ streaming adapters and depends on Core plus a specific published
 DolphinDotNet.GameCube version. The DolphinDotNet MSBuild SDK/compiler is a
 separate application requirement; it is not copied into an engine library nupkg.
 `Directory.Build.props` pins the package dependency version to
-`DolphinDotNet.GameCube` **0.1.0-preview.305.1**. The matching compiler/Assets
-preview includes indexed unlit vertex-color submission and shared mesh color
-streams. `IndexedMeshCache` is included in this engine preview; ordered passes
-retain the portable implementation unless explicitly built for the native backend. Source validation
-continues to use the pinned SDK checkout from `.sdk-revision`.
+`DolphinDotNet.GameCube` **0.1.0-preview.318.1**. The matching compiler/runtime
+source is **4c8cd26a1b5f8003598463116960367ffa17418f**, also pinned in
+`.sdk-revision` for source validation. Ordered passes retain their native SDK
+backend by default; the portable comparison remains available through
+`HypercubeNativePasses=false`.
+
+This upgrade accompanies [AnimalTown #47](https://github.com/capz/AnimalTown/pull/47).
+SDK 318 exposes independent TEV alpha stages, two-reference GX comparisons and
+`TevMaterialPresets.DualTextureGlints` for its two scrolling water samples.
+Hypercube's scrolling helpers use these materials through the existing SDK API;
+no separate effect format, shader wrapper or texture allocation is introduced.
+The relocated package consumer builds/AOT-bundles this combination with a single
+engine reference and no runtime override or NU1608 suppression.
+
+Once this engine preview has been verified and published, AnimalTown can pin
+that published version in place of engine 28 and remove its temporary explicit
+runtime-318 compatibility override. Engine previews are published only by the
+existing release workflow after its publication trigger; this PR does not
+reserve a future package number or publish an unverified package.
 
 ## Build and test without publishing
 
@@ -27,10 +41,10 @@ The packer builds against the public SDK package, checks package IDs, versions,
 license/readme/PDB contents and dependency metadata, and emits packages.json with
 the source commit. It fails on an accidental source-checkout SDK dependency.
 The consumer relocates the nupkgs, uses an isolated NuGet cache outside the
-repository, executes Core, then builds the Rendering sample through PackageReference
+repository, executes Core, then builds the Rendering sample and water-material consumer through PackageReference
 and the published DolphinDotNet SDK. It verifies transitive dependencies, confirms the SDK packages match the reviewed
 source revision in `.sdk-revision`, and checks AOT bundling and, with --native,
-actual DOL/ELF output. No SDK source checkout is
+actual Rendering and water DOL/ELF output. No SDK source checkout is
 needed to consume the packages.
 
 ## Publish
