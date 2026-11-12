@@ -1,0 +1,548 @@
+{
+  "schema": 1,
+  "currentSourceRevision": "31d531feebd3a3dc6567627c60ad8abaa34dac3d",
+  "currentPinnedSdk": "0.1.0-preview.315.1",
+  "currentPinnedHypercube": "0.1.0-preview.28.1",
+  "scope": "Read-only ARAM opportunity inventory, historical asset sizing",
+  "historicalProvenance": {
+    "gameRevision": "fca068009bed8025d71e3f95cfa3972db92fbf40",
+    "sdkVersion": "0.1.0-preview.266.1",
+    "sdkRevision": "858577c63aaf191fce7c83fd4308075d3775f43a",
+    "hypercubeVersion": "0.1.0-preview.9.1",
+    "compactFile": "AnimalTown-0.11.16+fca068009bed.nkit.iso",
+    "compactSha256": "ca7e16eaa26ed43ff4f4c491d9d170be07235f3d7b24f95771befd1b3ec413e1",
+    "manifestSha256": "dff7bab71f9f63eff01556a85adad8992048f1898cdecab36cb6853a53439899",
+    "verification": "Every extracted package SHA256 equals release manifest file SHA256; headers and texture section ranges parsed.",
+    "currentSourceActorArtUnchanged": true,
+    "currentConverterChanged": true
+  },
+  "models": [
+    {
+      "species": "fox",
+      "file": "fox.dndmodel",
+      "packageBytes": 578656,
+      "sha256": "308d93ca96e53765f06387828254fc6011395bb4d8afdccb174fbde7b9d77065",
+      "sections": [
+        {
+          "kind": 1,
+          "offset": 160,
+          "length": 2920,
+          "records": 27
+        },
+        {
+          "kind": 2,
+          "offset": 3104,
+          "length": 199456,
+          "records": 1
+        },
+        {
+          "kind": 3,
+          "offset": 202560,
+          "length": 84,
+          "records": 2
+        },
+        {
+          "kind": 4,
+          "offset": 202656,
+          "length": 327712,
+          "records": 1
+        },
+        {
+          "kind": 5,
+          "offset": 530368,
+          "length": 1640,
+          "records": 1
+        },
+        {
+          "kind": 6,
+          "offset": 532032,
+          "length": 46620,
+          "records": 2
+        }
+      ],
+      "decodedTexturePayloadBytes": 327680,
+      "textures": [
+        {
+          "index": 0,
+          "width": 256,
+          "height": 256,
+          "mipLevels": 2,
+          "decodedRgbaPayloadBytes": 327680,
+          "sha256": "158914ef785af94eb51f70d374df0ef486da1cffc25266f59f10c49af0866418"
+        }
+      ]
+    },
+    {
+      "species": "bunny",
+      "file": "bunny.dndmodel",
+      "packageBytes": 867744,
+      "sha256": "6a4d6e89cf2c879cfddb00ada6789edb243dfbb17d43d5b15cb0d5696eab7671",
+      "sections": [
+        {
+          "kind": 1,
+          "offset": 160,
+          "length": 220,
+          "records": 2
+        },
+        {
+          "kind": 2,
+          "offset": 384,
+          "length": 211748,
+          "records": 1
+        },
+        {
+          "kind": 3,
+          "offset": 212160,
+          "length": 84,
+          "records": 2
+        },
+        {
+          "kind": 4,
+          "offset": 212256,
+          "length": 655420,
+          "records": 2
+        },
+        {
+          "kind": 5,
+          "offset": 867680,
+          "length": 4,
+          "records": 0
+        },
+        {
+          "kind": 6,
+          "offset": 867712,
+          "length": 4,
+          "records": 0
+        }
+      ],
+      "decodedTexturePayloadBytes": 655360,
+      "textures": [
+        {
+          "index": 0,
+          "width": 256,
+          "height": 256,
+          "mipLevels": 2,
+          "decodedRgbaPayloadBytes": 327680,
+          "sha256": "7fcffabd46fde642f14cfc73cd90877668a325e2eeb738bfacee782691e56132"
+        },
+        {
+          "index": 1,
+          "width": 256,
+          "height": 256,
+          "mipLevels": 2,
+          "decodedRgbaPayloadBytes": 327680,
+          "sha256": "ca1ebcf1ec06af2b4b41d2214eb2a7796a09f9c09e5840110ee7fb72d4086610"
+        }
+      ]
+    },
+    {
+      "species": "giraffe",
+      "file": "giraffe.dndmodel",
+      "packageBytes": 491488,
+      "sha256": "796cda8486aba87d31da585bb8a12c93ecd9f6a52d2e8a14b4ac38ef2dfffe65",
+      "sections": [
+        {
+          "kind": 1,
+          "offset": 160,
+          "length": 3352,
+          "records": 31
+        },
+        {
+          "kind": 2,
+          "offset": 3520,
+          "length": 158192,
+          "records": 1
+        },
+        {
+          "kind": 3,
+          "offset": 161728,
+          "length": 84,
+          "records": 2
+        },
+        {
+          "kind": 4,
+          "offset": 161824,
+          "length": 327712,
+          "records": 1
+        },
+        {
+          "kind": 5,
+          "offset": 489536,
+          "length": 1912,
+          "records": 1
+        },
+        {
+          "kind": 6,
+          "offset": 491456,
+          "length": 4,
+          "records": 0
+        }
+      ],
+      "decodedTexturePayloadBytes": 327680,
+      "textures": [
+        {
+          "index": 0,
+          "width": 256,
+          "height": 256,
+          "mipLevels": 2,
+          "decodedRgbaPayloadBytes": 327680,
+          "sha256": "cd563201d5fb4a6b2617189d5139d1f58a8e7929e68198a9efb533d66aaf1a27"
+        }
+      ]
+    },
+    {
+      "species": "cat",
+      "file": "cat.dndmodel",
+      "packageBytes": 902432,
+      "sha256": "3850975810e19234fd69a7c6ab0dc514fe1b4d04ea52e51f293417c76e4bdd1c",
+      "sections": [
+        {
+          "kind": 1,
+          "offset": 160,
+          "length": 4000,
+          "records": 37
+        },
+        {
+          "kind": 2,
+          "offset": 4160,
+          "length": 240384,
+          "records": 1
+        },
+        {
+          "kind": 3,
+          "offset": 244544,
+          "length": 84,
+          "records": 2
+        },
+        {
+          "kind": 4,
+          "offset": 244640,
+          "length": 655420,
+          "records": 2
+        },
+        {
+          "kind": 5,
+          "offset": 900064,
+          "length": 2320,
+          "records": 1
+        },
+        {
+          "kind": 6,
+          "offset": 902400,
+          "length": 4,
+          "records": 0
+        }
+      ],
+      "decodedTexturePayloadBytes": 655360,
+      "textures": [
+        {
+          "index": 0,
+          "width": 256,
+          "height": 256,
+          "mipLevels": 2,
+          "decodedRgbaPayloadBytes": 327680,
+          "sha256": "ceb702f3d33715244abd67facd4ea62c5880a50e96b22cbe3b14e17741f74dbd"
+        },
+        {
+          "index": 1,
+          "width": 256,
+          "height": 256,
+          "mipLevels": 2,
+          "decodedRgbaPayloadBytes": 327680,
+          "sha256": "ad0d3eb83f39dfc044d40902a21dda9f01b8fac6b9357cb8f997552ad2788474"
+        }
+      ]
+    },
+    {
+      "species": "hamster",
+      "file": "hamster.dndmodel",
+      "packageBytes": 481504,
+      "sha256": "2c693e25ba76ebd701cd620b55409ce0713fd01daa2c29ecb733c424a74bbaec",
+      "sections": [
+        {
+          "kind": 1,
+          "offset": 160,
+          "length": 3028,
+          "records": 28
+        },
+        {
+          "kind": 2,
+          "offset": 3200,
+          "length": 148712,
+          "records": 1
+        },
+        {
+          "kind": 3,
+          "offset": 151936,
+          "length": 84,
+          "records": 2
+        },
+        {
+          "kind": 4,
+          "offset": 152032,
+          "length": 327712,
+          "records": 1
+        },
+        {
+          "kind": 5,
+          "offset": 479744,
+          "length": 1708,
+          "records": 1
+        },
+        {
+          "kind": 6,
+          "offset": 481472,
+          "length": 4,
+          "records": 0
+        }
+      ],
+      "decodedTexturePayloadBytes": 327680,
+      "textures": [
+        {
+          "index": 0,
+          "width": 256,
+          "height": 256,
+          "mipLevels": 2,
+          "decodedRgbaPayloadBytes": 327680,
+          "sha256": "c099f9bf44525cf3582ceb89f9bc31c92760c4d3e25ab67cd85c324eb47c463b"
+        }
+      ]
+    },
+    {
+      "species": "spaniel",
+      "file": "spaniel.dndmodel",
+      "packageBytes": 490304,
+      "sha256": "f3c9c0505f8ecb7a0811289a8a43226524851520136b6de2a7fe4ff285febf8c",
+      "sections": [
+        {
+          "kind": 1,
+          "offset": 160,
+          "length": 4864,
+          "records": 45
+        },
+        {
+          "kind": 2,
+          "offset": 5024,
+          "length": 154536,
+          "records": 1
+        },
+        {
+          "kind": 3,
+          "offset": 159584,
+          "length": 84,
+          "records": 2
+        },
+        {
+          "kind": 4,
+          "offset": 159680,
+          "length": 327712,
+          "records": 1
+        },
+        {
+          "kind": 5,
+          "offset": 487392,
+          "length": 2864,
+          "records": 1
+        },
+        {
+          "kind": 6,
+          "offset": 490272,
+          "length": 4,
+          "records": 0
+        }
+      ],
+      "decodedTexturePayloadBytes": 327680,
+      "textures": [
+        {
+          "index": 0,
+          "width": 256,
+          "height": 256,
+          "mipLevels": 2,
+          "decodedRgbaPayloadBytes": 327680,
+          "sha256": "ce2d227caaf5eff861c6e7a866f9277abbb45e5a7e97f06e5b830e8e18cc997b"
+        }
+      ]
+    }
+  ],
+  "uiTextures": [
+    {
+      "file": "gorditas-bold.dndtex",
+      "packageBytes": 524320,
+      "format": 3,
+      "width": 512,
+      "height": 512,
+      "pixelPayloadBytes": 524288,
+      "mipLevels": 1,
+      "sha256": "0578ec4a8fe0c634119c76678d1762be6dd9222136574d3bc1ad6bd9c78e2e9f"
+    },
+    {
+      "file": "item-icons.dndtex",
+      "packageBytes": 262176,
+      "format": 5,
+      "width": 512,
+      "height": 256,
+      "pixelPayloadBytes": 262144,
+      "mipLevels": 1,
+      "sha256": "f32e24032453b08f31c98f1c0f65e47fb5006865949d5f4bdcdb0ca1824af87d"
+    },
+    {
+      "file": "floor-outdoor-neutral.dndtex",
+      "packageBytes": 43744,
+      "format": 14,
+      "width": 256,
+      "height": 256,
+      "pixelPayloadBytes": 43712,
+      "mipLevels": 7,
+      "sha256": "3bc0f5bc9bc6e2bf18ac28e1d1d6775e8cb6239b2dd913eccaafc39911164b95"
+    }
+  ],
+  "totals": {
+    "packageBytes": 3812128,
+    "decodedRgbaTexturePayloadBytes": 2621440,
+    "uniqueDecodedRgbaTexturePayloadBytes": 2621440
+  },
+  "conditionalFoxIndoorExample": {
+    "conditions": [
+      "Fox player remains active",
+      "All five other species are outside current room",
+      "No other active instance shares these five model resources",
+      "Package and texture payload figures only; metadata, native allocator charges and instance caches excluded"
+    ],
+    "coldPackageBytes": 3233472,
+    "potentialDecodedTexturePayloadBytes": 2293760,
+    "potentialSelectedMem1PayloadBytes": 5527232
+  },
+  "terrain": {
+    "existingAramReservationBytes": 8388608,
+    "fixedMem1CachePayloadBytes": 1048576,
+    "historicalUsedAramPayloadBytes": 3840416,
+    "historicalChargedMem1BufferBytes": 1168384,
+    "historicalEvidenceRevision": "fbba8e2e52e43c63b52704c1b7880226017f52ee",
+    "source": "docs/performance/2026-11-09-immutable-terrain.json",
+    "potentialInteriorMem1CachePayloadBytes": 1048576
+  },
+  "caveats": [
+    "This is not a current-source runtime or hardware trace.",
+    "Historical converter266 outputs are examples; regenerate with pinned315 tool before budgeting current main.",
+    "Model package bytes already embed the listed texture payload, so sum package plus decoded texture only to estimate existing MEM1 duplication; ARAM stores package once.",
+    "Do not sum UI/terrain/model examples as a proven concurrent working set.",
+    "The currently retained building representation explicitly rejects SDK package copy/unload.",
+    "Existing shared native ARAM single-flight arbitration must be fixed before simultaneous model paging and terrain binds."
+  ],
+  "historicalBuildingParts": [
+    {
+      "file": "cottage-door-tex128.dndmodel",
+      "packageBytes": 30080,
+      "retainedGeometrySectionBytes": 9120,
+      "textures": [
+        {
+          "width": 64,
+          "height": 64,
+          "levels": 2,
+          "pixelBytes": 20480,
+          "sha256": "1849915b91d48d91d558106da39a89f53df241489e7b6702ef0a9c5c1615ff1e"
+        }
+      ]
+    },
+    {
+      "file": "cottage-east-tex128.dndmodel",
+      "packageBytes": 24032,
+      "retainedGeometrySectionBytes": 3072,
+      "textures": [
+        {
+          "width": 64,
+          "height": 64,
+          "levels": 2,
+          "pixelBytes": 20480,
+          "sha256": "1849915b91d48d91d558106da39a89f53df241489e7b6702ef0a9c5c1615ff1e"
+        }
+      ]
+    },
+    {
+      "file": "cottage-exterior-closed-tex128.dndmodel",
+      "packageBytes": 76960,
+      "retainedGeometrySectionBytes": 55992,
+      "textures": [
+        {
+          "width": 64,
+          "height": 64,
+          "levels": 2,
+          "pixelBytes": 20480,
+          "sha256": "1849915b91d48d91d558106da39a89f53df241489e7b6702ef0a9c5c1615ff1e"
+        }
+      ]
+    },
+    {
+      "file": "cottage-exterior-tex128.dndmodel",
+      "packageBytes": 67904,
+      "retainedGeometrySectionBytes": 46920,
+      "textures": [
+        {
+          "width": 64,
+          "height": 64,
+          "levels": 2,
+          "pixelBytes": 20480,
+          "sha256": "1849915b91d48d91d558106da39a89f53df241489e7b6702ef0a9c5c1615ff1e"
+        }
+      ]
+    },
+    {
+      "file": "cottage-floor-tex128.dndmodel",
+      "packageBytes": 27072,
+      "retainedGeometrySectionBytes": 6096,
+      "textures": [
+        {
+          "width": 64,
+          "height": 64,
+          "levels": 2,
+          "pixelBytes": 20480,
+          "sha256": "1849915b91d48d91d558106da39a89f53df241489e7b6702ef0a9c5c1615ff1e"
+        }
+      ]
+    },
+    {
+      "file": "cottage-north-tex128.dndmodel",
+      "packageBytes": 33120,
+      "retainedGeometrySectionBytes": 12144,
+      "textures": [
+        {
+          "width": 64,
+          "height": 64,
+          "levels": 2,
+          "pixelBytes": 20480,
+          "sha256": "1849915b91d48d91d558106da39a89f53df241489e7b6702ef0a9c5c1615ff1e"
+        }
+      ]
+    },
+    {
+      "file": "cottage-south-tex128.dndmodel",
+      "packageBytes": 30080,
+      "retainedGeometrySectionBytes": 9120,
+      "textures": [
+        {
+          "width": 64,
+          "height": 64,
+          "levels": 2,
+          "pixelBytes": 20480,
+          "sha256": "1849915b91d48d91d558106da39a89f53df241489e7b6702ef0a9c5c1615ff1e"
+        }
+      ]
+    },
+    {
+      "file": "cottage-west-tex128.dndmodel",
+      "packageBytes": 24032,
+      "retainedGeometrySectionBytes": 3072,
+      "textures": [
+        {
+          "width": 64,
+          "height": 64,
+          "levels": 2,
+          "pixelBytes": 20480,
+          "sha256": "1849915b91d48d91d558106da39a89f53df241489e7b6702ef0a9c5c1615ff1e"
+        }
+      ]
+    }
+  ],
+  "historicalInteriorGeometrySectionBytes": 33504,
+  "historicalKitUniqueDecodedTexturePayloadBytes": 20480
+}

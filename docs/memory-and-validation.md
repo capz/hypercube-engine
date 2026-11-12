@@ -52,3 +52,7 @@ Texture page splitting can cause excessive draws; fix via hierarchical merging. 
 See [the memory reduction audit](memory-reduction-audit.md) for measured host
 allocation changes, reproducible world payload accounting, implemented staging
 and metadata reductions, and larger opportunities requiring API/hardware work.
+
+See the [cross-repository ARAM residency investigation](aram-residency-investigation.md)
+for cold-resource opportunities, actual allocator/transfer constraints and the
+performance gates needed before automatic paging in AnimalTown.
