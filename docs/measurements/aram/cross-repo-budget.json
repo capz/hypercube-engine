@@ -84,5 +84,46 @@
     "Historical AnimalTown converter266 assets must be regenerated with pinned315 tooling before current runtime budgeting.",
     "Selected candidates are not a proven concurrent working set.",
     "An ARAM copy frees no MEM1 until original allocations are actually released."
-  ]
+  ],
+  "illustrativeDolphinComparison": {
+    "scope": "Prior combined memory-reduction validation capture; not a matched replay or new benchmark",
+    "hardwareMeasurement": false,
+    "matchedReplay": false,
+    "sourceFile": "out/dolphin-memory-sdk-release-extended/results.json",
+    "sourceSha256": "50e2662f40ac1a9f864d8d0fdbac327855233cafe6e54ae5be319931641db398",
+    "configuration": {
+      "group": 2,
+      "format": 14,
+      "readBatchBytes": 65536,
+      "maxBatchRecords": 8,
+      "injectFaults": false
+    },
+    "cases": [
+      {
+        "scenario": 4,
+        "caseFrames": 663,
+        "frame99ms": 17,
+        "reads": 129,
+        "storageKiB": 456,
+        "aramKiB": 0,
+        "aramHits": 0,
+        "publications": 225,
+        "cancelled": 331,
+        "useAram": false
+      },
+      {
+        "scenario": 6,
+        "caseFrames": 690,
+        "frame99ms": 18,
+        "reads": 87,
+        "storageKiB": 327,
+        "aramKiB": 142,
+        "aramHits": 69,
+        "publications": 232,
+        "cancelled": 348,
+        "useAram": true
+      }
+    ],
+    "interpretation": "Less storage traffic; different publications/frame counts and rounded frame p99. Does not establish no performance regression."
+  }
 }
