@@ -8,7 +8,6 @@ namespace Hypercube.GameCube;
 
 public sealed class PackedWorld : IDisposable
 {
-    private readonly FileStream bootstrap;
     // Reserve one reusable decode buffer before variable-size bootstrap allocations.
     public readonly byte[] Scratch = new byte[16384];
     private readonly VertexPositionNormalColorTexture[] vertices=new VertexPositionNormalColorTexture[384];
@@ -30,54 +29,64 @@ public sealed class PackedWorld : IDisposable
     public PackedWorld(string path)
     {
         Assets=new AssetStream(path);
-        bootstrap=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
-        var header=new byte[32];ReadExact(bootstrap,header,32);
-        int count=Binary.I32(header,8);
-        if(count<1||count>4096)throw new IOException("Pack record count exceeds validation bound.");
-        var table=new byte[count*64];ReadExact(bootstrap,table,table.Length);
-        Catalog=new AssetCatalog(header,table,bootstrap.Length);
-        Patches=new Mesh?[count+1];TriangleCounts=new int[count+1];VertexCounts=new int[count+1];
-        for(int i=0;i<85;i++){NodeMinY[i]=100;NodeMaxY[i]=-100;}
-        for(int tile=0;tile<2;tile++)
+        try
         {
-            var r=Catalog.Get(Catalog.Texture(14,4,3,tile));
-            var bytes=ReadPayload(r);
-            var texture=Texture2D.CreateNative(r.Width,r.Width,NativeTextureFormat.Cmpr,true);
-            texture.ReplaceNative(bytes);CoarseTextures[tile]=texture;
-        }
-        int native=0;
-        for(int id=1;id<=count;id++)
-        {
-            var r=Catalog.Get(id);
-            if(r.Kind==4)
+            using var bootstrap=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+            var header=new byte[32];ReadExact(bootstrap,header,32);
+            int count=Binary.I32(header,8);
+            if(count<1||count>4096)throw new IOException("Pack record count exceeds validation bound.");
+            var table=new byte[count*64];ReadExact(bootstrap,table,table.Length);
+            Catalog=new AssetCatalog(header,table,bootstrap.Length);
+            Patches=new Mesh?[count+1];TriangleCounts=new int[count+1];VertexCounts=new int[count+1];
+            for(int i=0;i<85;i++){NodeMinY[i]=100;NodeMaxY[i]=-100;}
+            for(int tile=0;tile<2;tile++)
             {
-                var payload=ReadPayload(r);
-                var texture=Catalog.Get(Catalog.Texture(14,4,3,r.Material));
-                var mesh=DecodeMesh(payload,r,texture,4);
-                Patches[id]=mesh;ParentMeshCount++;ParentTriangles+=Binary.U16(payload,6)/3;
-                TriangleCounts[id]=Binary.U16(payload,6)/3;VertexCounts[id]=Binary.U16(payload,4);
-                for(int k=0;k<Binary.U16(payload,4);k++)
+                var r=Catalog.Get(Catalog.Texture(14,4,3,tile));
+                var bytes=ReadPayload(bootstrap,r);
+                var texture=Texture2D.CreateNative(r.Width,r.Width,NativeTextureFormat.Cmpr,true);
+                CoarseTextures[tile]=texture;texture.ReplaceNative(bytes);
+            }
+            int native=0;
+            for(int id=1;id<=count;id++)
+            {
+                var r=Catalog.Get(id);
+                if(r.Kind==4)
                 {
-                    float y=Binary.I32(payload,12+k*32+4)/65536f;
-                    if(y<NodeMinY[r.Cell])NodeMinY[r.Cell]=y;
-                    if(y>NodeMaxY[r.Cell])NodeMaxY[r.Cell]=y;
+                    var payload=ReadPayload(bootstrap,r);
+                    var texture=Catalog.Get(Catalog.Texture(14,4,3,r.Material));
+                    var mesh=DecodeMesh(payload,r,texture,4);
+                    Patches[id]=mesh;ParentMeshCount++;ParentTriangles+=Binary.U16(payload,6)/3;
+                    TriangleCounts[id]=Binary.U16(payload,6)/3;VertexCounts[id]=Binary.U16(payload,4);
+                    for(int k=0;k<Binary.U16(payload,4);k++)
+                    {
+                        float y=Binary.I32(payload,12+k*32+4)/65536f;
+                        if(y<NodeMinY[r.Cell])NodeMinY[r.Cell]=y;
+                        if(y>NodeMaxY[r.Cell])NodeMaxY[r.Cell]=y;
+                    }
+                    native+=mesh.NativeBytes;
+                    if(native>1024*1024)throw new IOException("Coarse patch hierarchy exceeds its 1 MiB native budget.");
                 }
-                native+=mesh.NativeBytes;
-                if(native>1024*1024)throw new IOException("Coarse patch hierarchy exceeds its 1 MiB native budget.");
+                else if(r.Kind==5)
+                {
+                    var payload=ReadPayload(bootstrap,r);
+                    if(r.Length!=56||Binary.U32(payload,0)!=0x44574348)throw new IOException("Invalid scene metadata.");
+                    MinY=Binary.I32(payload,8)/65536f;MaxY=Binary.I32(payload,20)/65536f;
+                    VerifiedOccluder=Binary.I32(payload,28)==1;
+                    for(int k=0;k<6;k++)Occluder[k]=Binary.I32(payload,32+k*4)/65536f;
+                }
             }
-            else if(r.Kind==5)
-            {
-                var payload=ReadPayload(r);
-                if(r.Length!=56||Binary.U32(payload,0)!=0x44574348)throw new IOException("Invalid scene metadata.");
-                MinY=Binary.I32(payload,8)/65536f;MaxY=Binary.I32(payload,20)/65536f;
-                VerifiedOccluder=Binary.I32(payload,28)==1;
-                for(int k=0;k<6;k++)Occluder[k]=Binary.I32(payload,32+k*4)/65536f;
-            }
+            if(ParentMeshCount==0)throw new IOException("The pack has no permanent coarse hierarchy.");
         }
-        if(ParentMeshCount==0)throw new IOException("The pack has no permanent coarse hierarchy.");
+        catch
+        {
+            // A failed constructor cannot hand ownership back to the caller.
+            // Reclaim the source and every GPU resource created so far.
+            Dispose();
+            throw;
+        }
     }
     public bool HasCell(int cell)=>Catalog.FirstPatch(Tree.Leaf(cell))!=0;
-    private byte[] ReadPayload(AssetRecord r)
+    private byte[] ReadPayload(FileStream bootstrap,AssetRecord r)
     {
         if(r.Length>16384)throw new IOException("Bootstrap payload exceeds its managed scratch limit.");
         var bytes=Scratch;bootstrap.Seek(r.Offset,SeekOrigin.Begin);ReadExact(bootstrap,bytes,r.Length);
@@ -122,8 +131,8 @@ public sealed class PackedWorld : IDisposable
     }
     public void Dispose()
     {
-        Assets.Dispose();bootstrap.Dispose();
-        for(int i=0;i<Patches.Length;i++)Patches[i]?.Dispose();
+        Assets.Dispose();
+        if(Patches!=null)for(int i=0;i<Patches.Length;i++)Patches[i]?.Dispose();
         for(int i=0;i<CoarseTextures.Length;i++)CoarseTextures[i]?.Dispose();
     }
 }

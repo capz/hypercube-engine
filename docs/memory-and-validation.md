@@ -48,3 +48,7 @@ Acceptance requires a representative **playable** 30 FPS original-console test, 
 ## Major risks
 
 Texture page splitting can cause excessive draws; fix via hierarchical merging. Atlas overfetch can overload storage; compare equal-budget misses **and** bytes transferred. ARAM promotions can compete with audio; prioritize safely. Small MEM1 budgets constrain whole-game utility; test during animation and gameplay rather than static demos.
+
+See [the memory reduction audit](memory-reduction-audit.md) for measured host
+allocation changes, reproducible world payload accounting, implemented staging
+and metadata reductions, and larger opportunities requiring API/hardware work.

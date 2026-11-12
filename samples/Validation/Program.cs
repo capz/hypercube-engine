@@ -152,8 +152,8 @@ internal sealed partial class ProbeScene : IDisposable
     {
         streamer.Frame=frame;
         if(!streamer.Stop())return;
-        streamer.Dispose();
-        if(device.NativeBytes!=baseline-131072)throw new InvalidOperationException("Native resources leaked across a scenario transition.");
+        int stagingBytes=streamer.StagingBytes;streamer.Dispose();
+        if(device.NativeBytes!=baseline-stagingBytes)throw new InvalidOperationException("Native resources leaked across a scenario transition.");
         if(Aram.Statistics.AllocatedBytes!=0)throw new InvalidOperationException("ARAM transfers or allocations leaked across a scenario transition.");
         scenario=requested;requested=-1;completedMask&=~(1<<scenario);
         streamer=new WorldStreamer(world,path,Budget);Configure();

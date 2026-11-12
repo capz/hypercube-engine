@@ -17,7 +17,8 @@ public sealed class WorldStreamer : IDisposable
     private readonly AssetCatalog catalog;
     private readonly PackedWorld world;
     private readonly AssetStream stream;
-    private readonly NativeBuffer staging=NativeBuffer.Allocate(131072);
+    private readonly NativeBuffer staging;
+    private bool disposed;
     private readonly Mesh?[] meshes=new Mesh?[ResourceCapacity];
     private readonly NativeBuffer?[] collisionBuffers=new NativeBuffer?[ResourceCapacity];
     private readonly int[] textureSlots=new int[ResourceCapacity],owned=new int[ResourceCapacity];
@@ -48,13 +49,25 @@ public sealed class WorldStreamer : IDisposable
         MultiplePublications,CancelledUploads,UploadedBytes,ChecksumUs,MaxUploadUs,MaxPumpUs,MeshTriangles,Deferred,Publications;
     public int PhysicalBytes=>Textures.PhysicalBytes+otherBytes;
     public int Active=>count;
+    public int MaximumReadBatchBytes {get;}
+    public int StagingBytes=>disposed?0:staging.Length;
+    // Retain the original constructor's binary signature for existing clients.
     public WorldStreamer(PackedWorld world,string path,int budgetBytes=384*1024)
+        :this(world,path,budgetBytes,StreamingBufferPolicy.DefaultMaximumReadBatchBytes){}
+    /// <summary>Reserve the configured coalescing limit and every supported
+    /// single record up front. ReadBatchBytes may change within that limit;
+    /// use 131040 to restore the previous maximum coalescing range.</summary>
+    public WorldStreamer(PackedWorld world,string path,int budgetBytes,int maximumReadBatchBytes)
     {
         this.world=world;scratch=world.Scratch;catalog=world.Catalog;stream=world.Assets;
+        int stagingBytes=StreamingBufferPolicy.Capacity(catalog,maximumReadBatchBytes);
+        MaximumReadBatchBytes=maximumReadBatchBytes;
         Policy=new ResourceScheduler(catalog,ResourceCapacity,budgetBytes);
         Cold=new AramCache(catalog.Count,256*1024);
         for(int i=0;i<textureSlots.Length;i++)textureSlots[i]=-1;
         for(int i=0;i<24;i++)if(world.HasCell(i))Cells.CoarseReady(i);
+        // Finish managed validation/setup before taking native ownership.
+        staging=NativeBuffer.Allocate(stagingBytes);
     }
     public void BeginDemand()=>Policy.BeginDemand();
     private void Demand(int id,ResourcePriority priority)
@@ -159,8 +172,9 @@ public sealed class WorldStreamer : IDisposable
     }
     private void Queue()
     {
-        int limit=Policy.RequiredBatchBytes(Frame,ReadBatchBytes);
-        if(limit>131040)throw new IOException("Asset exceeds the bounded native staging size.");
+        int coalescing=StreamingBufferPolicy.CoalescingLimit(ReadBatchBytes,MaximumReadBatchBytes);
+        int limit=Policy.RequiredBatchBytes(Frame,coalescing);
+        if(limit>StreamingBufferPolicy.MaximumRecordBytes)throw new IOException("Asset exceeds the bounded native staging size.");
         count=Policy.BeginBatch(Frame,limit,MaxBatchRecords,batch,out batchOffset,out batchLength);
         if(count==0)return;
         // A large record may exceed the requested coalescing size; SDK reads it
@@ -320,8 +334,9 @@ public sealed class WorldStreamer : IDisposable
     }
     public void Dispose()
     {
+        if(disposed)return;
         if(count!=0)throw new InvalidOperationException("Drain streaming work before disposal.");
         for(int i=0;i<meshes.Length;i++){meshes[i]?.Dispose();collisionBuffers[i]?.Dispose();}
-        Textures.Dispose();Cold.Dispose();staging.Dispose();otherBytes=0;
+        Textures.Dispose();Cold.Dispose();staging.Dispose();otherBytes=0;disposed=true;
     }
 }

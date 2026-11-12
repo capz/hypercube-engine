@@ -1,0 +1,57 @@
+{
+  "caveats": [
+    "Array/object headers and allocator rounding excluded from managed payload totals.",
+    "Managed heap reservation is unchanged; these are occupancy reductions.",
+    "Cold ARAM, permanent geometry, active/idle texture pairs, framebuffers and SDK heaps are separate.",
+    "Unsupported large records retain their existing demand-time rejection."
+  ],
+  "hardwareMeasurement": false,
+  "idleAramMetadata": {
+    "disabled": {
+      "after": 0,
+      "before": 5200,
+      "saved": 5200
+    },
+    "enabledAfterFirstStore": {
+      "after": 5200,
+      "before": 5200,
+      "saved": 0
+    },
+    "targetPointerBytes": 4
+  },
+  "largestSupportedStreamRecord": 73984,
+  "maximumReadBatchBytes": 65536,
+  "nativeStagingBytes": {
+    "after": 73984,
+    "before": 131072,
+    "saved": 57088
+  },
+  "records": 649,
+  "retainedManagedPayload": {
+    "catalogIds": {
+      "after": 2862,
+      "before": 5724,
+      "saved": 2862
+    },
+    "saved": 4162,
+    "schedulerLookup": {
+      "after": 1300,
+      "before": 2600,
+      "saved": 1300
+    }
+  },
+  "schema": 1,
+  "scope": "validated-v1-world-payload-accounting",
+  "sourceSha256": "0a782f8137b426528a185cb8bbb5a67ae50d8fc5448ef6a88d56016daec49024",
+  "transientCatalogTailPayload": {
+    "after": 192,
+    "before": 384,
+    "saved": 192
+  },
+  "unchanged": {
+    "metadataInputBytes": 41536,
+    "parsedRecordPayloadBytes": 36344,
+    "textureCopiesPerPoolSlot": 2
+  },
+  "unsupportedStreamRecords": 0
+}
