@@ -11,7 +11,9 @@ public sealed class ResourceScheduler
 {
     private readonly int[] ids, priorities, generations, retries, references, pins, touched, fences;
     private readonly ResourceState[] states;
-    private readonly int[] lookup;
+    // Slot+1 fits in ushort even for slot 255. Zero means no mapping;
+    // stale mappings remain harmless until the old slot is reused.
+    private readonly ushort[] lookup;
     private readonly uint[] freeMasks;
     private readonly AssetCatalog catalog;
     private int nextGeneration = 1, order;
@@ -26,8 +28,7 @@ public sealed class ResourceScheduler
         this.catalog = catalog; BudgetBytes = budgetBytes;
         ids = new int[capacity]; priorities = new int[capacity]; generations = new int[capacity];
         retries = new int[capacity]; references = new int[capacity]; pins = new int[capacity]; touched = new int[capacity];
-        states = new ResourceState[capacity]; fences = new int[capacity]; lookup = new int[catalog.Count+1];
-        for(int i=0;i<lookup.Length;i++)lookup[i]=-1;
+        states = new ResourceState[capacity]; fences = new int[capacity]; lookup = new ushort[catalog.Count+1];
         freeMasks=new uint[(capacity+31)/32];
         for(int i=0;i<capacity;i++)freeMasks[i>>5]|=1u<<(i&31);
     }
@@ -36,7 +37,11 @@ public sealed class ResourceScheduler
     public ResourceState State(int slot) => states[slot];
     public ResourcePriority Priority(int slot) => (ResourcePriority)priorities[slot];
     public int Find(int id)
-    { return id>0&&id<lookup.Length&&lookup[id]>=0&&states[lookup[id]]!=ResourceState.Missing?lookup[id]:-1; }
+    {
+        if(id<=0||id>=lookup.Length)return -1;
+        int slot=lookup[id]-1;
+        return slot>=0&&states[slot]!=ResourceState.Missing?slot:-1;
+    }
     public void BeginDemand()
     { for (int i = 0; i < ids.Length; i++) references[i] = 0; }
     private int FirstFree()
@@ -73,8 +78,8 @@ public sealed class ResourceScheduler
         if(free>=0)
         {
             int i=free;
-            if(ids[i]>0&&lookup[ids[i]]==i)lookup[ids[i]]=-1;
-            ids[i] = id; lookup[id]=i; states[i] = ResourceState.Queued; priorities[i] = (int)priority;
+            if(ids[i]>0&&lookup[ids[i]]==i+1)lookup[ids[i]]=0;
+            ids[i] = id; lookup[id]=(ushort)(i+1); states[i] = ResourceState.Queued; priorities[i] = (int)priority;
             freeMasks[i>>5]&=~(1u<<(i&31));
             references[i] = 1; touched[i] = ++order; generations[i] = nextGeneration++;
             retries[i] = 0; return i;

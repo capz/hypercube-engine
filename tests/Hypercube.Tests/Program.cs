@@ -12,6 +12,7 @@ var header = raw[..32];
 int count = Binary.I32(header, 8);
 var index = raw[32..(32 + count * 64)];
 var catalog = new AssetCatalog(header, index, raw.Length);
+StreamingBufferChecks.Run(catalog);
 Check(Binary.Crc(System.Text.Encoding.ASCII.GetBytes("123456789"), 0, 9) == 0xcbf43926u, "CRC known vector");
 foreach (int format in new[] { 6, 14 }) foreach (int group in new[] { 1, 2, 4 })
 {
@@ -341,3 +342,5 @@ var stableIndex=(byte[])index.Clone();var stableCatalog=new AssetCatalog(header,
 var beforeMutation=stableCatalog.Get(1);Array.Clear(stableIndex);
 Check(stableCatalog.Get(1).Equals(beforeMutation),"Validated metadata remains immutable after input mutation");
 Console.WriteLine("Free-slot transitions, stable demand ordering, cached metadata and execution accounting passed.");
+
+CompactIndexChecks.Run();

@@ -67,8 +67,10 @@ public sealed class AssetCatalog
         return count*64+extra;
     }
     private readonly AssetRecord[] records;
-    private readonly int[] textures = new int[576], collisions = new int[24], meshHeads = new int[96], patchHeads = new int[85];
-    private readonly int[] next;
+    // Record IDs are bounded to 1..4096, with zero as the missing sentinel.
+    // Keep the validated records cached; only narrow their index/link storage.
+    private readonly ushort[] textures = new ushort[576], collisions = new ushort[24], meshHeads = new ushort[96], patchHeads = new ushort[85];
+    private readonly ushort[] next;
     public int Count { get; }
     public int Length { get; }
     public int DataOffset { get; }
@@ -84,7 +86,7 @@ public sealed class AssetCatalog
             throw new IOException("Invalid pack index bounds or checksum.");
         records = new AssetRecord[Count];
         for(int i=0;i<Count;i++)records[i]=new AssetRecord(index,i*64);
-        next = new int[Count + 1];var meshTails=new int[96];
+        next = new ushort[Count + 1];var meshTails=new ushort[96];
         int end = DataOffset, scenes = 0;
         for (int i = 1; i <= Count; i++)
         {
@@ -109,19 +111,19 @@ public sealed class AssetCatalog
                 int key=TextureIndex(r.Format,r.Group,r.Mip,r.Cell);
                 int cols=(6+r.Group-1)/r.Group;
                 if(r.Cell>=cols*((4+r.Group-1)/r.Group)||textures[key]!=0)throw new IOException("Duplicate or invalid texture tile.");
-                textures[key] = i;
+                textures[key] = (ushort)i;
                 }
             else if (r.Kind == 2)
             {
                 if(r.Length<12||r.Length>16384||r.Cell<0||r.Cell>=24||r.Mip<0||r.Mip>2||r.Variant<0||r.Variant>1)throw new IOException("Invalid geometry key.");
                 int key=r.Cell*4+(r.Variant==0?3:r.Mip);
-                if(meshHeads[key]==0)meshHeads[key]=i;else next[meshTails[key]]=i;
-                meshTails[key]=i;
+                if(meshHeads[key]==0)meshHeads[key]=(ushort)i;else next[meshTails[key]]=(ushort)i;
+                meshTails[key]=(ushort)i;
             }
             else if(r.Kind==3)
-            {if(r.Cell<0||r.Cell>=24||r.Length!=44||collisions[r.Cell]!=0)throw new IOException("Invalid collision record.");collisions[r.Cell]=i;}
+            {if(r.Cell<0||r.Cell>=24||r.Length!=44||collisions[r.Cell]!=0)throw new IOException("Invalid collision record.");collisions[r.Cell]=(ushort)i;}
             else if(r.Kind==4)
-            {if(r.Length<12||r.Length>16384||r.Cell<0||r.Cell>=85||r.Material<0||r.Material>1)throw new IOException("Invalid patch record.");next[i]=patchHeads[r.Cell];patchHeads[r.Cell]=i;}
+            {if(r.Length<12||r.Length>16384||r.Cell<0||r.Cell>=85||r.Material<0||r.Material>1)throw new IOException("Invalid patch record.");next[i]=patchHeads[r.Cell];patchHeads[r.Cell]=(ushort)i;}
             else if(r.Kind==5&& (r.Length!=56||++scenes>1))throw new IOException("Invalid scene metadata.");
         }
         for (int i = 1; i <= Count; i++)
