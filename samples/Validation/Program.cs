@@ -101,7 +101,7 @@ internal sealed partial class ProbeScene : IDisposable
         DebugOverlay.WriteLine("BOOT: AUDIO LOADED");
         streamer=new WorldStreamer(world,path,Budget);Configure();
         DebugOverlay.WriteLine("BOOT: STREAMER READY");
-        baseline=device.NativeBytes-streamer.PhysicalBytes;
+        baseline=device.NativeBytes-streamer.PhysicalBytes-streamer.ColdStagingBytes;
         caseAt=lastTick=Clock.Timestamp;
         device.BeginFrame(new Color32(8,10,19));device.EndFrame();
     }
@@ -152,6 +152,8 @@ internal sealed partial class ProbeScene : IDisposable
     {
         streamer.Frame=frame;
         if(!streamer.Stop())return;
+        // baseline contains the read source; the lazy cold source is charged
+        // separately in the per-frame assertion and must also disappear here.
         int stagingBytes=streamer.StagingBytes;streamer.Dispose();
         if(device.NativeBytes!=baseline-stagingBytes)throw new InvalidOperationException("Native resources leaked across a scenario transition.");
         if(Aram.Statistics.AllocatedBytes!=0)throw new InvalidOperationException("ARAM transfers or allocations leaked across a scenario transition.");
@@ -297,7 +299,7 @@ internal sealed partial class ProbeScene : IDisposable
         if(ProfilingSuite)RecordProfilePump(pumpAt,decodeBefore,createBefore);
         prepareAt=ProfilingSuite?Clock.Timestamp:0;
         actorTransform.LocalPosition=new Vector3(actorX,actorY,actorZ);
-        if(device.NativeBytes!=baseline+streamer.PhysicalBytes||streamer.PhysicalBytes>streamer.Policy.BudgetBytes)
+        if(device.NativeBytes!=baseline+streamer.PhysicalBytes+streamer.ColdStagingBytes||streamer.PhysicalBytes>streamer.Policy.BudgetBytes)
             throw new InvalidOperationException("Native resource accounting or dynamic budget failed.");
         if(!voice.IsPlaying)throw new InvalidOperationException("Audio voice stopped during streaming.");
 #if HYPERCUBE_ONEMS

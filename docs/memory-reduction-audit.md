@@ -20,11 +20,21 @@ not a physical-console trace.
 | Catalog ID indexes/links, retained managed payload | 5,724 B | 2,862 B | 2,862 B |
 | Scheduler ID-to-slot lookup, retained managed payload | 2,600 B | 1,300 B | 1,300 B |
 | ARAM metadata while unused, managed payload on 32-bit target | 5,200 B | 0 B | 5,200 B |
+| ARAM metadata once active, including pending transfer references | 5,200 B | 7,800 B | -2,600 B |
+| Selected idle/fence/read-state arrays, replacing store-task references | 32 B | 904 B | -872 B |
+| Optional cold-write native buffer, allocated lazily | 0 B | 16,384 B | -16,384 B |
 | Temporary catalog mesh-tail payload | 384 B | 192 B | 192 B |
 
-The native staging reduction is **57,088 bytes**. The selected retained arrays
-save **9,362 B of element payload** while the cold cache is unused, or 4,162 B
-after its first successful cold allocation. These figures exclude object field
+The read-source reduction remains **57,088 bytes**. Once the optional cold-write
+buffer is allocated, the two native buffers together save **40,704 bytes** over
+the baseline source buffer. Additional native savings depend on actually
+retiring unused resident geometry and texture pairs; retaining a cold copy alone
+does not free their MEM1 allocations. See [cold residency](aram-residency.md).
+
+After the new idle/fence bookkeeping and pending-transfer references, the selected
+retained arrays save **8,490 B of element payload** while the cold cache is unused,
+or **690 B** once it is active. The catalog/scheduler index arrays themselves
+still save 4,162 B. These figures exclude object field
 changes, object/array headers and allocator rounding; they are not a whole
 managed-heap net total. The SDK's reserved managed heap is unchanged: lower live occupancy
 reduces pressure but does not automatically return that reservation to the
@@ -71,8 +81,10 @@ An unused `AramCache` no longer reserves per-record entry/age arrays. Metadata i
 created only after the first native cold allocation succeeds; empty probes,
 over-budget stores and failed native allocation do not allocate it. Once
 active, the cache uses the same bounds and LRU/protected-ID behavior. On the
-32-bit target this avoids `8*(recordCount+1)` payload bytes while unused, up to
-32,776 B at 4,096 records. This one-time first-use allocation may occur during
+32-bit target this avoids the baseline's `8*(recordCount+1)` payload bytes while
+unused, up to 32,776 B at 4,096 records. The active cache now also tracks pending
+store tasks, charging `12*(recordCount+1)` bytes instead of the baseline's eight
+bytes per entry. This one-time first-use allocation may occur during
 streaming; normal stores already allocate transfer/ARAM ownership. Callers still drain
 transfers before disposal. Zero-ID entries are now evicted and freed correctly.
 
@@ -89,11 +101,14 @@ partial ownership is released.
 
 ## DolphinDotNet audit
 
-The SDK changes are delivered separately in
-[DolphinDotNet PR #171](https://github.com/capz/DolphinDotNet/pull/171). This engine
-keeps its source pin and published NuGet dependency on SDK 318 until a matching
-SDK release is available; source and package consumers must use the same reviewed
-SDK revision. The engine reductions above work with SDK 318 independently.
+The original SDK allocation reductions were delivered in
+[DolphinDotNet PR #171](https://github.com/capz/DolphinDotNet/pull/171). The later
+cold-residency work uses the shared broker from
+[DolphinDotNet PR #173](https://github.com/capz/DolphinDotNet/pull/173). The source
+pin in `.sdk-revision` and the published dependency in `Directory.Build.props`
+must identify the same reviewed SDK revision. The original compact indexes and
+bounded source buffer remain compatible with SDK 318 APIs; prioritized DMA is
+provided by the newer broker.
 
 The SDK renderer previously reserved two 4,096-entry model submission tables,
 although it admits at most 4,096 submissions in total. A shared table preserves

@@ -62,6 +62,21 @@ def ground_coverage(rgb,state):
     if tested<2 or missing>1:raise AssertionError(f'Ground coverage holes: {missing}/{tested} at {fx},{fz}')
     return tested
 
+def native_residency_baseline(state,baseline):
+    """V2 scene contract: only ARAM/fault cases can own the lazy 16 KiB source.
+
+    Its allocation is independent of dynamic residents. Require either the
+    unallocated or full allocation state, and require its release on transition.
+    One KiB tolerates independent integer rounding of the native/dynamic fields.
+    """
+    current=state['nativeKiB']-state['dynamicKiB']
+    if baseline is None:baseline=current
+    allowed=(0,16) if state['scenario'] in (6,7) else (0,)
+    if min(abs(current-baseline-extra) for extra in allowed)>1:
+        raise AssertionError('Resources leaked between cases or cold staging exceeded its bound')
+    return baseline
+
+
 def validate(capture,root,smoke):
     # A streaming decoder bounds memory independently of suite duration.
     command=['ffmpeg','-threads','1','-v','error','-i',str(capture),'-vf','fps=2,scale=640:480:flags=neighbor','-f','rawvideo','-pix_fmt','rgb24','pipe:1']
@@ -86,9 +101,7 @@ def validate(capture,root,smoke):
             states.append(s);case=s['scenario']
             if not 0<=case<11:raise AssertionError('Unknown scenario')
             if s['dynamicKiB']>(48 if case==8 else 384) or s['residentKiB']>s['dynamicKiB']+1:raise AssertionError('Dynamic budget exceeded')
-            current=s['nativeKiB']-s['dynamicKiB']
-            if baseline is None:baseline=current
-            if abs(current-baseline)>1:raise AssertionError('Resources leaked between cases')
+            baseline=native_residency_baseline(s,baseline)
             if s['audioActive']!=1:raise AssertionError('Audio voice stopped')
             if s['completedMask']|last_mask!=s['completedMask']:raise AssertionError('Completion mask regressed')
             last_mask=s['completedMask']

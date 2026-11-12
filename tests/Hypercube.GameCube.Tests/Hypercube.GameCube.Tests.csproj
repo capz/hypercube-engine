@@ -4,5 +4,7 @@
     <Compile Include="../../src/Hypercube.GameCube/IndexedMeshCache.cs" Link="IndexedMeshCache.cs" />
     <Compile Include="../../src/Hypercube.GameCube/AramCache.cs" Link="AramCache.cs" />
     <Compile Include="../../src/Hypercube.GameCube/PackedWorld.cs" Link="PackedWorld.cs" />
+    <Compile Include="../../src/Hypercube.GameCube/TexturePool.cs" Link="TexturePool.cs" />
+    <Compile Include="../../src/Hypercube.GameCube/WorldStreamer.cs" Link="WorldStreamer.cs" />
   </ItemGroup>
 </Project>

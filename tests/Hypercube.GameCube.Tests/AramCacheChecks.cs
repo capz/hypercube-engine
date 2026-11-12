@@ -54,26 +54,63 @@ internal static class AramCacheChecks
         zero.Store(0,source,0,32,protectedIds,0)!.GetAwaiter().GetResult();
         Check(zero.Has(0),"Zero ID is no longer supported.");zero.Dispose();
         Check(Aram.LiveBytes==0,"Zero ID survived cache disposal.");
-        Console.WriteLine("Lazy ARAM cache: zero per-record allocation while unused/rejected, aligned transfers, LRU/protection including ID zero, failure cleanup and disposal passed.");
+        var delayed=new AramCache(8,64);AramTransferQueue.Delay=true;
+        var uploading=delayed.Store(1,source,0,64,protectedIds,0)!;
+        Check(!uploading.IsCompleted&&!delayed.Has(1)&&delayed.State(1)==AramCacheState.Filling&&delayed.PendingStores==1,"An unfinished upload was published.");
+        Check(delayed.Store(1,source,0,64,protectedIds,0)==null&&!delayed.Remove(1),"A filling entry was replaced or removed.");
+        Check(delayed.Store(2,source,0,64,protectedIds,0)==null&&delayed.Evictions==0,"A filling entry was evicted.");
+        try{delayed.Dispose();throw new Exception("An unfinished upload was discarded by disposal.");}catch(InvalidOperationException){}
+        AramTransferQueue.Complete();delayed.Pump();
+        Check(delayed.Has(1)&&delayed.PendingStores==0&&delayed.StoreBytes==64,"Finished upload did not publish exactly once.");
+        var fetching=delayed.Fetch(1,target,0,64);
+        Check(delayed.Remove(1)&&delayed.Bytes==0&&Aram.LiveBytes==64,"Removing a fetched allocation ignored its native transfer hold.");
+        delayed.Dispose();AramTransferQueue.Complete();fetching.GetAwaiter().GetResult();
+        Check(Aram.LiveBytes==0,"A fetch outliving cache disposal leaked its native hold.");
+        for(int mode=0;mode<2;mode++)
+        {
+            delayed.Store(1,source,0,64,protectedIds,0);
+            AramTransferQueue.Complete(mode==0?new InvalidOperationException("Delayed DMA failure."):new OperationCanceledException());
+            delayed.Pump();
+            Check(!delayed.Has(1)&&delayed.State(1)==AramCacheState.Failed&&delayed.PendingStores==0&&delayed.Bytes==0&&Aram.LiveBytes==0,"Asynchronous failure/cancellation retained a partial cache entry.");
+        }
+        Check(delayed.FailedStores==2,"Failed cache writes were not counted once.");
+        delayed.Store(1,source,0,64,protectedIds,0);AramTransferQueue.Complete();
+        Check(delayed.Has(1)&&delayed.State(1)==AramCacheState.Ready,"Failed cache entry could not be retried.");
+        delayed.Dispose();AramTransferQueue.Delay=false;
+        Check(Aram.LiveBytes==0,"Delayed cache checks leaked ARAM.");
+        source.Dispose();target.Dispose();
+        Console.WriteLine("ARAM cache: lazy metadata, alignment, LRU/protection, unpublished filling entries, async failure/cancel rollback, native fetch holds and draining disposal passed.");
     }
 }
 
 namespace Dolphin.Graphics
 {
-    public sealed class NativeBuffer
+    public sealed class NativeBuffer : IDisposable
     {
         internal readonly byte[] Data;
-        public NativeBuffer(int size){Data=new byte[size];}
+        public static int LiveBytes,Allocations;private bool disposed;private int holds;
+        public int Length=>Data.Length;
+        public NativeBuffer(int size){Data=new byte[size];LiveBytes+=size;Allocations++;}
+        public static NativeBuffer Allocate(int bytes)=>new NativeBuffer(bytes);
+        internal void Hold(){if(disposed)throw new Exception("Holding a disposed native buffer.");holds++;}
+        internal void Release(){if(--holds<0)throw new Exception("Unbalanced native buffer hold.");}
+        internal void EnsureWritable(){if(disposed||holds!=0)throw new Exception("Overwriting a held or disposed native buffer.");}
+        public void Write(byte[] source,int sourceOffset=0,int destinationOffset=0,int count=-1){EnsureWritable();if(count<0)count=source.Length-sourceOffset;Array.Copy(source,sourceOffset,Data,destinationOffset,count);}
+        public void Read(byte[] target,int sourceOffset=0,int destinationOffset=0,int count=-1){if(disposed)throw new Exception("Reading a disposed native buffer.");if(count<0)count=target.Length-destinationOffset;Array.Copy(Data,sourceOffset,target,destinationOffset,count);}
+        public uint ComputeCrc32(int offset,int count,uint initial=0){if(disposed)throw new Exception("Checksumming a disposed native buffer.");return Hypercube.Binary.Crc(Data,offset,count,initial);}
+        public void Dispose(){if(disposed||holds!=0)throw new Exception("Disposing a held or disposed native buffer.");disposed=true;LiveBytes-=Length;}
     }
 }
 namespace Dolphin.Memory
 {
     public sealed class AramBuffer : IDisposable
     {
-        internal readonly byte[] Data;private bool disposed;
+        internal readonly byte[] Data;private bool disposed;private int holds;
         public int Length=>Data.Length;
         internal AramBuffer(int size){Data=new byte[size];Aram.LiveBytes+=size;}
-        public void Dispose(){if(disposed)throw new Exception("ARAM allocation disposed twice.");disposed=true;Aram.LiveBytes-=Length;}
+        internal void Hold(){if(disposed)throw new Exception("Holding a disposed ARAM allocation.");holds++;}
+        internal void Release(){if(--holds<0)throw new Exception("Unbalanced ARAM hold.");if(disposed&&holds==0)Aram.LiveBytes-=Length;}
+        public void Dispose(){if(disposed)throw new Exception("ARAM allocation disposed twice.");disposed=true;if(holds==0)Aram.LiveBytes-=Length;}
     }
     public static class Aram
     {
@@ -84,10 +121,31 @@ namespace Dolphin.Memory
     }
     public static class AramTransferQueue
     {
-        public static bool Fail;public static int LastBytes;
+        public static bool Fail,Delay;public static int LastBytes;
+        private sealed class Transfer {
+            internal readonly TaskCompletionSource<int> Completion=new TaskCompletionSource<int>();
+            internal AramBuffer Owner=null!;internal Dolphin.Graphics.NativeBuffer Native=null!;
+            internal byte[] Source=null!,Target=null!;internal int SourceOffset,TargetOffset,Bytes;
+        }
+        private static readonly System.Collections.Generic.List<Transfer> pending=new System.Collections.Generic.List<Transfer>();
+        public static bool HasPending=>pending.Count!=0;
+        private static Task Copy(AramBuffer owner,Dolphin.Graphics.NativeBuffer native,byte[] source,int sourceOffset,byte[] target,int targetOffset,int bytes)
+        {
+            LastBytes=bytes;
+            if(!Delay){Array.Copy(source,sourceOffset,target,targetOffset,bytes);return Task.CompletedTask;}
+            owner.Hold();native.Hold();var transfer=new Transfer{Owner=owner,Native=native,Source=source,SourceOffset=sourceOffset,Target=target,TargetOffset=targetOffset,Bytes=bytes};
+            pending.Add(transfer);return transfer.Completion.Task;
+        }
+        public static void Complete(Exception? error=null)
+        {
+            if(pending.Count==0)throw new Exception("No transfer to complete.");var transfer=pending[0];pending.RemoveAt(0);
+            if(error==null)Array.Copy(transfer.Source,transfer.SourceOffset,transfer.Target,transfer.TargetOffset,transfer.Bytes);
+            transfer.Owner.Release();transfer.Native.Release();
+            if(error is OperationCanceledException)transfer.Completion.SetCanceled();else if(error!=null)transfer.Completion.SetException(error);else transfer.Completion.SetResult(transfer.Bytes);
+        }
         public static Task CopyToAramAsync(Dolphin.Graphics.NativeBuffer source,int sourceOffset,AramBuffer target,int targetOffset,int bytes)
-        {if(Fail)throw new InvalidOperationException("Injected copy failure.");LastBytes=bytes;Array.Copy(source.Data,sourceOffset,target.Data,targetOffset,bytes);return Task.CompletedTask;}
+        {if(Fail)throw new InvalidOperationException("Injected copy failure.");return Copy(target,source,source.Data,sourceOffset,target.Data,targetOffset,bytes);}
         public static Task CopyToMainAsync(AramBuffer source,int sourceOffset,Dolphin.Graphics.NativeBuffer target,int targetOffset,int bytes)
-        {LastBytes=bytes;Array.Copy(source.Data,sourceOffset,target.Data,targetOffset,bytes);return Task.CompletedTask;}
+        {return Copy(source,target,source.Data,sourceOffset,target.Data,targetOffset,bytes);}
     }
 }
