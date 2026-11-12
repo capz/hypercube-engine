@@ -22,11 +22,11 @@ not a physical-console trace.
 | ARAM metadata while unused, managed payload on 32-bit target | 5,200 B | 0 B | 5,200 B |
 | Temporary catalog mesh-tail payload | 384 B | 192 B | 192 B |
 
-The persistent reduction with an unused cold cache is **57,088 native bytes**
-plus **9,362 managed payload bytes**. With ARAM caching active, the persistent
-managed reduction is 4,162 bytes after the first successful cold allocation.
-Object/array headers and allocator rounding are excluded from these payload
-figures. The SDK's reserved managed heap is unchanged: lower live occupancy
+The native staging reduction is **57,088 bytes**. The selected retained arrays
+save **9,362 B of element payload** while the cold cache is unused, or 4,162 B
+after its first successful cold allocation. These figures exclude object field
+changes, object/array headers and allocator rounding; they are not a whole
+managed-heap net total. The SDK's reserved managed heap is unchanged: lower live occupancy
 reduces pressure but does not automatically return that reservation to the
 native allocator. No heap-size default or texture quality is reduced.
 
@@ -89,7 +89,8 @@ partial ownership is released.
 
 ## DolphinDotNet audit
 
-The SDK changes are delivered separately from the engine changes. This engine
+The SDK changes are delivered separately in
+[DolphinDotNet PR #171](https://github.com/capz/DolphinDotNet/pull/171). This engine
 keeps its source pin and published NuGet dependency on SDK 318 until a matching
 SDK release is available; source and package consumers must use the same reviewed
 SDK revision. The engine reductions above work with SDK 318 independently.

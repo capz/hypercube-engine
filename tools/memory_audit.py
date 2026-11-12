@@ -40,7 +40,7 @@ def audit(path, maximum_read_batch_bytes=65536):
                 transientCatalogTailPayload=change(96*4,96*2),
                 unchanged=dict(parsedRecordPayloadBytes=count*56,metadataInputBytes=count*64,
                                textureCopiesPerPoolSlot=2),
-                caveats=['Array/object headers and allocator rounding excluded from managed payload totals.',
+                caveats=['Selected array element payload only; object field changes, headers and allocator rounding excluded.',
                          'Managed heap reservation is unchanged; these are occupancy reductions.',
                          'Cold ARAM, permanent geometry, active/idle texture pairs, framebuffers and SDK heaps are separate.',
                          'Unsupported large records retain their existing demand-time rejection.'])

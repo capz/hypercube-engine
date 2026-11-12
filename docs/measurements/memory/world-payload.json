@@ -1,6 +1,6 @@
 {
   "caveats": [
-    "Array/object headers and allocator rounding excluded from managed payload totals.",
+    "Selected array element payload only; object field changes, headers and allocator rounding excluded.",
     "Managed heap reservation is unchanged; these are occupancy reductions.",
     "Cold ARAM, permanent geometry, active/idle texture pairs, framebuffers and SDK heaps are separate.",
     "Unsupported large records retain their existing demand-time rejection."
