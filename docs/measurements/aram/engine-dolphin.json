@@ -1,0 +1,289 @@
+{
+  "schema": 1,
+  "kind": "host-dolphin-fixture-acceptance",
+  "hardwareValidation": false,
+  "source": {
+    "engineBase": "a5d2eea566c0521aa5a91a8b177ebdd11df49518",
+    "engineSourceWasUncommitted": true,
+    "sdkRevision": "a219fa35b2cd0aea725976461cdc0e5444b040d2",
+    "sha256": {
+      "src/Hypercube.Core/AssetCatalog.cs": "860dec978853f27ae5663b8e9d364953b0768c4b9641f3f10a97db16cb92819c",
+      "src/Hypercube.Core/CameraFrustum.cs": "4fa9c9bb5b68a0fe0c95d2b4bdd489343c8c181ec1071c59f3a0da3651f54c24",
+      "src/Hypercube.Core/DemandPlan.cs": "19a724c9f62afd54cf797c82186ff80ac002b8e1f9095116159ffb06d19b054c",
+      "src/Hypercube.Core/FrameMetrics.cs": "639a5fc2d1144fe2f3ea61e29a1a4ea70fdc1d59292b58a2f4d674e83991d3b2",
+      "src/Hypercube.Core/FrameProfile.cs": "7397adebe6aa26ff97c2859182328eb013ed1e1a1931e08ee3881884c0885477",
+      "src/Hypercube.Core/MaterialMotion.cs": "dbe53eecf906530d5e832d9926e84992b5921f5153df59068ba9dfb8e6940f90",
+      "src/Hypercube.Core/OpaqueDrawQueue.cs": "d57f6f8b44199bf1ecff51ce258c1c893710a819135ea796aa9a3eba284457ca",
+      "src/Hypercube.Core/RenderCounters.cs": "f5ac676b4274b0fab838a95df24bbd8b3c3de6b92d9d80036182c414103abd00",
+      "src/Hypercube.Core/ResourceLeases.cs": "bf63bc89400f6243f4ec8135ce06ba34f6111bba75a52412a1dbb9ea0f73da06",
+      "src/Hypercube.Core/ResourceScheduler.cs": "fb1ffe07b77d9489503abeb4c7d9bfdb788d34c598242442670dc00f0be2d84c",
+      "src/Hypercube.Core/ScenePolicy.cs": "4e7093b317cecbaa9f41a40ac21c97104e331af1c9fedadb1be38065c5ffb100",
+      "src/Hypercube.Core/SceneTree.cs": "3977897cfe31068c9d3683a798a725736e1e8508179a1968fbf91ef404997934",
+      "src/Hypercube.Core/StreamingBufferPolicy.cs": "fe4d0dd1d4ec6c6466fbfb9265d20818048d00f80219b0b3ceb43184d0dc6eae",
+      "src/Hypercube.Core/TelemetryRuns.cs": "2b0876b8ed39e6f59ca8cc2fcc59e11577187ba38bdc38102c33b5aa446b8bdd",
+      "src/Hypercube.Core/TextureFamilies.cs": "9fb7c1e039305b0c5fcc009579c086f2fbc21509dbee5bc6a99ee61427e5f904",
+      "src/Hypercube.Core/TextureLodPolicy.cs": "092c28c09cdab261c3ba5b40feed30d6240877716ac24c1cf7cf5864bf14697f",
+      "src/Hypercube.Core/Visibility.cs": "e8632395ae11de52199a63ee323596307ff7a24186e22a6f83cefad8f0e19a00",
+      "src/Hypercube.GameCube/AramCache.cs": "b4997af1f3a54dfc7fa84a82c25e0ba27602d766ccb3bffcf35469acd04ee9b7",
+      "src/Hypercube.GameCube/WorldStreamer.cs": "b50d0ccdafd7806534e3490b606bdc450defe9e0f3fb605cc92bce01bd93f051",
+      "src/Hypercube.GameCube/TexturePool.cs": "848c0943c606067de8a7e2461b296005cf886d36171d55324f3ba6851926357a",
+      "src/Hypercube.GameCube/PackedWorld.cs": "e96e81d532323369c7c23cb6c9b48f5c6db2bd3f7c6e764a15fcb9ede5c7844e",
+      "samples/Validation/Program.cs": "ba2666bd8c1a3a78675fb2521609422015f3cfe04461987f306bc2987a68c8bf"
+    }
+  },
+  "artifacts": [
+    {
+      "path": "Game.dol",
+      "bytes": 1678368,
+      "sha256": "cab41823659016c63f9df5cdb7e7fad8432eafdfab1fb6e67d091765535c9e0f"
+    },
+    {
+      "path": "world.iso",
+      "bytes": 2191360,
+      "sha256": "e882962d95064eabebe9d4c5d522c44036fe1a7c5deb1aba85c01bc453c65de4"
+    },
+    {
+      "path": "world.hcp",
+      "bytes": 2156768,
+      "sha256": "0a782f8137b426528a185cb8bbb5a67ae50d8fc5448ef6a88d56016daec49024"
+    }
+  ],
+  "execution": {
+    "containerImage": "animaltown-title-dolphin:local",
+    "dsp": "LLE",
+    "configuration": "Release",
+    "wallRecordingSeconds": 480,
+    "sampledFrames": 377,
+    "sampleRateHz": 2
+  },
+  "acceptance": {
+    "completedScenarios": 11,
+    "completedMask": 2047,
+    "guestFrame": 11282,
+    "occlusionComparison": {
+      "referenceDraws": 28,
+      "culledDraws": 26,
+      "comparedPixels": 199680,
+      "changedPixels": 0,
+      "maxChannelDifference": 0
+    },
+    "audio": [
+      {
+        "file": "ID-Game_2026-11-12_15-22-33_dspdump1.wav",
+        "seconds": 188.65603014029392,
+        "activeWindows": 1887,
+        "longestQuietMs": 0
+      }
+    ],
+    "baselineResourceKiB": 544,
+    "coldStagingCapacityBytes": 16384,
+    "nativeExcessKiBByScenario": [
+      {
+        "scenario": 0,
+        "minimumExcessKiB": 0,
+        "maximumExcessKiB": 0
+      },
+      {
+        "scenario": 1,
+        "minimumExcessKiB": 0,
+        "maximumExcessKiB": 0
+      },
+      {
+        "scenario": 2,
+        "minimumExcessKiB": 0,
+        "maximumExcessKiB": 0
+      },
+      {
+        "scenario": 3,
+        "minimumExcessKiB": 0,
+        "maximumExcessKiB": 0
+      },
+      {
+        "scenario": 4,
+        "minimumExcessKiB": 0,
+        "maximumExcessKiB": 1
+      },
+      {
+        "scenario": 5,
+        "minimumExcessKiB": 0,
+        "maximumExcessKiB": 0
+      },
+      {
+        "scenario": 6,
+        "minimumExcessKiB": 16,
+        "maximumExcessKiB": 17
+      },
+      {
+        "scenario": 7,
+        "minimumExcessKiB": 16,
+        "maximumExcessKiB": 16
+      },
+      {
+        "scenario": 8,
+        "minimumExcessKiB": 0,
+        "maximumExcessKiB": 0
+      },
+      {
+        "scenario": 9,
+        "minimumExcessKiB": 0,
+        "maximumExcessKiB": 0
+      },
+      {
+        "scenario": 10,
+        "minimumExcessKiB": 0,
+        "maximumExcessKiB": 0
+      }
+    ],
+    "completedCases": [
+      {
+        "scenario": 0,
+        "frame": 673,
+        "caseFrames": 673,
+        "completedMask": 1,
+        "nativeKiB": 927,
+        "dynamicKiB": 383,
+        "residentKiB": 383,
+        "aramKiB": 0,
+        "aramHits": 0,
+        "failures": 0,
+        "cancelled": 831
+      },
+      {
+        "scenario": 1,
+        "frame": 1362,
+        "caseFrames": 671,
+        "completedMask": 3,
+        "nativeKiB": 898,
+        "dynamicKiB": 354,
+        "residentKiB": 304,
+        "aramKiB": 0,
+        "aramHits": 0,
+        "failures": 0,
+        "cancelled": 685
+      },
+      {
+        "scenario": 2,
+        "frame": 2051,
+        "caseFrames": 664,
+        "completedMask": 7,
+        "nativeKiB": 694,
+        "dynamicKiB": 150,
+        "residentKiB": 142,
+        "aramKiB": 0,
+        "aramHits": 0,
+        "failures": 0,
+        "cancelled": 694
+      },
+      {
+        "scenario": 3,
+        "frame": 2771,
+        "caseFrames": 690,
+        "completedMask": 15,
+        "nativeKiB": 694,
+        "dynamicKiB": 150,
+        "residentKiB": 140,
+        "aramKiB": 0,
+        "aramHits": 0,
+        "failures": 0,
+        "cancelled": 738
+      },
+      {
+        "scenario": 4,
+        "frame": 3460,
+        "caseFrames": 688,
+        "completedMask": 31,
+        "nativeKiB": 718,
+        "dynamicKiB": 174,
+        "residentKiB": 161,
+        "aramKiB": 0,
+        "aramHits": 0,
+        "failures": 0,
+        "cancelled": 273
+      },
+      {
+        "scenario": 5,
+        "frame": 4149,
+        "caseFrames": 686,
+        "completedMask": 63,
+        "nativeKiB": 743,
+        "dynamicKiB": 199,
+        "residentKiB": 199,
+        "aramKiB": 0,
+        "aramHits": 0,
+        "failures": 0,
+        "cancelled": 169
+      },
+      {
+        "scenario": 6,
+        "frame": 4839,
+        "caseFrames": 685,
+        "completedMask": 127,
+        "nativeKiB": 740,
+        "dynamicKiB": 180,
+        "residentKiB": 167,
+        "aramKiB": 180,
+        "aramHits": 74,
+        "failures": 0,
+        "cancelled": 277
+      },
+      {
+        "scenario": 7,
+        "frame": 5528,
+        "caseFrames": 683,
+        "completedMask": 255,
+        "nativeKiB": 722,
+        "dynamicKiB": 162,
+        "residentKiB": 150,
+        "aramKiB": 98,
+        "aramHits": 37,
+        "failures": 30,
+        "cancelled": 385
+      },
+      {
+        "scenario": 8,
+        "frame": 6217,
+        "caseFrames": 680,
+        "completedMask": 511,
+        "nativeKiB": 591,
+        "dynamicKiB": 47,
+        "residentKiB": 47,
+        "aramKiB": 0,
+        "aramHits": 0,
+        "failures": 25,
+        "cancelled": 464
+      },
+      {
+        "scenario": 9,
+        "frame": 6907,
+        "caseFrames": 675,
+        "completedMask": 1023,
+        "nativeKiB": 544,
+        "dynamicKiB": 0,
+        "residentKiB": 0,
+        "aramKiB": 0,
+        "aramHits": 0,
+        "failures": 0,
+        "cancelled": 0
+      },
+      {
+        "scenario": 10,
+        "frame": 11282,
+        "caseFrames": 4359,
+        "completedMask": 2047,
+        "nativeKiB": 544,
+        "dynamicKiB": 0,
+        "residentKiB": 0,
+        "aramKiB": 0,
+        "aramHits": 0,
+        "failures": 0,
+        "cancelled": 0
+      }
+    ]
+  },
+  "limits": [
+    "Functional ownership, rendering, movement, fault and audio acceptance in software-rendered Dolphin.",
+    "Source hashes identify the working-tree runtime tested before the final dependency-pin commit.",
+    "Native excess permits one KiB of independent native/resident integer rounding; the 16 KiB cold source occurs only in scenarios 6 and 7 and is gone in scenario 8.",
+    "This is not an original-console or matched-replay performance benchmark; quantized guest frame counters do not prove zero overhead."
+  ]
+}

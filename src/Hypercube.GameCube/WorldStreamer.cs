@@ -18,22 +18,34 @@ public sealed class WorldStreamer : IDisposable
     private readonly PackedWorld world;
     private readonly AssetStream stream;
     private readonly NativeBuffer staging;
+    // Optional demotions never borrow the read/upload source across a batch.
+    // Whole records larger than this small ring remain recoverable from storage.
+    private const int ColdWriteCapacity=16384;
+    private NativeBuffer? coldStaging;
+    private Task? coldWrite;
+    private int coldRetryAt;
     private bool disposed;
     private readonly Mesh?[] meshes=new Mesh?[ResourceCapacity];
     private readonly NativeBuffer?[] collisionBuffers=new NativeBuffer?[ResourceCapacity];
     private readonly int[] textureSlots=new int[ResourceCapacity],owned=new int[ResourceCapacity];
     private readonly int[] triangleCounts=new int[ResourceCapacity];
+    private readonly int[] idleSince=new int[ResourceCapacity];
     private readonly float[] heights=new float[216];
     private readonly int[] heightMasks=new int[24];
     private readonly int[] batch=new int[8],tags=new int[8],batchIds=new int[8];
-    private readonly Task?[] uploads=new Task?[8],stores=new Task?[8];
-    private readonly bool[] observed=new bool[8];
+    private readonly Task?[] uploads=new Task?[8];
+    private readonly bool[] observed=new bool[8],fromCold=new bool[8];
     private readonly byte[] scratch,one=new byte[1];
     private Task<int>? reading;
     private int count,batchOffset,batchLength,actualRead,verifyRecord,verifyAt,holdUntil,sequence,textureStages,otherBytes;
     private uint checksum;
     private bool stopping;
     public int Frame,CompletedFrame,Group=1,Format=14,ReadBatchBytes=32768,MaxBatchRecords=4;
+    // Retain recently unused resources for camera reversals, then reclaim a
+    // bounded number between frames. Collision and coarse fallbacks stay hot.
+    public int IdleResourceFrames=120,IdleTextureFrames=120,MaximumIdleReleases=2;
+    public int WarmTextureHighBytes=32768,WarmTextureLowBytes=16384;
+    public bool RetireIdleResources=true;
     public bool UseAram,InjectFaults,AdaptiveFallback,CoarseFirst,TexturesOnly,ProfileReads;
     private long readAt;
     private DemandPlan? demandPlan;
@@ -48,6 +60,8 @@ public sealed class WorldStreamer : IDisposable
     public int ReadOperations,StorageBytes,AramBytes,Failures,ChecksumFailures,ShortReads,Corruptions,Delays,Batches,MaxBatch,
         MultiplePublications,CancelledUploads,UploadedBytes,ChecksumUs,MaxUploadUs,MaxPumpUs,MeshTriangles,Deferred,Publications;
     public int PhysicalBytes=>Textures.PhysicalBytes+otherBytes;
+    public int ColdStagingBytes=>disposed||coldStaging==null?0:coldStaging.Length;
+    public int ColdWriteSkips,ColdWriteFailures,ColdReadFailures,ColdWriteBytes,ColdReleases,ColdTextureTrims,PartialCacheBatches;
     public int Active=>count;
     public int MaximumReadBatchBytes {get;}
     public int StagingBytes=>disposed?0:staging.Length;
@@ -64,7 +78,7 @@ public sealed class WorldStreamer : IDisposable
         MaximumReadBatchBytes=maximumReadBatchBytes;
         Policy=new ResourceScheduler(catalog,ResourceCapacity,budgetBytes);
         Cold=new AramCache(catalog.Count,256*1024);
-        for(int i=0;i<textureSlots.Length;i++)textureSlots[i]=-1;
+        for(int i=0;i<textureSlots.Length;i++){textureSlots[i]=-1;idleSince[i]=-1;}
         for(int i=0;i<24;i++)if(world.HasCell(i))Cells.CoarseReady(i);
         // Finish managed validation/setup before taking native ownership.
         staging=NativeBuffer.Allocate(stagingBytes);
@@ -127,7 +141,12 @@ public sealed class WorldStreamer : IDisposable
         int slot=Policy.Find(id);
         return slot>=0&&Policy.State(slot)==ResourceState.Resident&&textureSlots[slot]>=0?Textures.Get(textureSlots[slot]).Texture:null;
     }
-    public void Pin(int id){int slot=Policy.Find(id);if(slot>=0)Policy.Pin(slot,Frame);}
+    public void Pin(int id)
+    {
+        int slot=Policy.Find(id);if(slot<0)return;
+        Policy.Pin(slot,Frame);
+        if(textureSlots[slot]>=0)Textures.Pin(textureSlots[slot],Frame);
+    }
     public float Ground(int cell,float x,float z)
     {
         float u=(x-(cell%6)*4)/2,v=(z-(cell/6)*4)/2;
@@ -142,17 +161,17 @@ public sealed class WorldStreamer : IDisposable
     private void Release(int slot,ResourcePriority incoming)
     {
         var r=catalog.Get(Policy.Id(slot));
-        if(textureSlots[slot]>=0){Textures.Unbind(textureSlots[slot]);textureSlots[slot]=-1;}
+        if(textureSlots[slot]>=0){Textures.Unbind(textureSlots[slot],Frame);textureSlots[slot]=-1;}
         if(meshes[slot]!=null){meshes[slot]!.Dispose();meshes[slot]=null;otherBytes-=owned[slot];}
         if(collisionBuffers[slot]!=null)
         {collisionBuffers[slot]!.Dispose();collisionBuffers[slot]=null;otherBytes-=owned[slot];Cells.CollisionMissing(r.Cell);}
-        owned[slot]=0;Policy.Evict(slot,CompletedFrame,incoming);
+        owned[slot]=0;idleSince[slot]=-1;Policy.Evict(slot,CompletedFrame,incoming);
     }
     private bool Room(int extra,ResourcePriority priority)
     {
         while(PhysicalBytes+extra>Policy.BudgetBytes)
         {
-            if(Textures.TrimFree()>0)continue;
+            if(Textures.TrimFree(CompletedFrame)>0)continue;
             int victim=Policy.EvictionCandidate(CompletedFrame,priority);
             if(victim<0)return false;
             Release(victim,priority);
@@ -161,11 +180,11 @@ public sealed class WorldStreamer : IDisposable
     }
     private bool TextureRoom(AssetRecord record,ResourcePriority priority)
     {
-        while(PhysicalBytes+Textures.ExtraBytes(record)>Policy.BudgetBytes)
+        while(PhysicalBytes+Textures.ExtraBytes(record,CompletedFrame)>Policy.BudgetBytes)
         {
             int victim=Policy.EvictionCandidate(CompletedFrame,priority);
             if(victim>=0){Release(victim,priority);continue;}
-            if(Textures.TrimFree()>0)continue;
+            if(Textures.TrimFree(CompletedFrame)>0)continue;
             return false;
         }
         return true;
@@ -181,36 +200,56 @@ public sealed class WorldStreamer : IDisposable
         // in bounded chunks. Adjacent small records still share one logical read.
         batchLength=(batchLength+31)&~31;
         for(int i=0;i<count;i++)
-        {tags[i]=Policy.Generation(batch[i]);batchIds[i]=Policy.Id(batch[i]);uploads[i]=stores[i]=null;observed[i]=false;}
-        bool cached=UseAram;
-        for(int i=0;i<count;i++)if(!Cold.Has(batchIds[i]))cached=false;
+        {tags[i]=Policy.Generation(batch[i]);batchIds[i]=Policy.Id(batch[i]);uploads[i]=null;observed[i]=fromCold[i]=false;}
+        int cached=0;
+        if(UseAram)for(int i=0;i<count;i++)if(Cold.Has(batchIds[i]))cached++;
         if(ProfileReads)readAt=Clock.Timestamp;
-        reading=cached?ReadCold():stream.ReadAtAsync(batchOffset,staging,0,batchLength);
-        if(cached)AramBytes+=batchLength;else{StorageBytes+=batchLength;ReadOperations++;}
+        if(cached==count)reading=ReadMixed();
+        else if(cached>0){PartialCacheBatches++;reading=ReadMixed();}
+        else{StorageBytes+=batchLength;ReadOperations++;reading=stream.ReadAtAsync(batchOffset,staging,0,batchLength);}
         sequence++;Batches++;if(count>MaxBatch)MaxBatch=count;
         verifyRecord=verifyAt=0;checksum=0;actualRead=-1;
         holdUntil=InjectFaults&&sequence%5==0?Frame+12:Frame;
         if(holdUntil>Frame)Delays++;
     }
-    private async Task<int> ReadCold()
+    private async Task<int> ReadMixed()
     {
         for(int i=0;i<count;i++)
         {
             var r=catalog.Get(batchIds[i]);
-            await Cold.Fetch(r.Id,staging,r.Offset-batchOffset,r.Length);
+            int relative=r.Offset-batchOffset,bytes=(r.Length+31)&~31;
+            if(Cold.Has(r.Id))
+            {
+                try
+                {AramBytes+=bytes;await Cold.Fetch(r.Id,staging,relative,r.Length);fromCold[i]=true;}
+                catch{Cold.Remove(r.Id);ColdReadFailures++;}
+            }
+            if(!fromCold[i])
+            {
+                // Cache hits split media reads, but adjacent misses retain
+                // the existing coalescing benefit instead of one read per ID.
+                int last=i;
+                while(last+1<count&&!Cold.Has(batchIds[last+1]))last++;
+                var tail=catalog.Get(batchIds[last]);
+                int required=tail.Offset+tail.Length-r.Offset;
+                bytes=(required+31)&~31;
+                StorageBytes+=bytes;ReadOperations++;
+                int read=await stream.ReadAtAsync(r.Offset,staging,relative,bytes);
+                if(read<required)return relative+read;
+                i=last;
+            }
         }
         return batchLength;
     }
     private void StartRecord(int i)
     {
         int slot=batch[i];var r=catalog.Get(batchIds[i]);int relative=r.Offset-batchOffset;
-        if(UseAram)stores[i]=Cold.Store(r.Id,staging,relative,r.Length,batchIds,count);
         long at=Clock.Timestamp;
         if(r.Kind==1)
         {
             if(!TextureRoom(r,Policy.Priority(slot))||!Policy.CanPublish(slot,r.Length*2))
             {Policy.Defer(slot,Frame);Deferred++;return;}
-            int pool=Textures.Acquire(r);
+            int pool=Textures.Acquire(r,CompletedFrame);
             if(pool<0){Policy.Defer(slot,Frame);Deferred++;return;}
             textureSlots[slot]=pool;owned[slot]=r.Length*2;
             uploads[i]=Textures.Get(pool).StageUploadAsync(staging,relative);
@@ -242,7 +281,56 @@ public sealed class WorldStreamer : IDisposable
             }
             owned[slot]=bytes;otherBytes+=bytes;Policy.Publish(slot,bytes);Publications++;UploadedBytes+=r.Length;
         }
+        TryColdStore(r,relative);
         int cost=(int)(Clock.Timestamp-at);if(cost>MaxUploadUs)MaxUploadUs=cost;
+    }
+    private void PollColdStore()
+    {
+        Cold.Pump();
+        if(coldWrite==null||!coldWrite.IsCompleted)return;
+        try{coldWrite.GetAwaiter().GetResult();}
+        catch{ColdWriteFailures++;}
+        coldWrite=null;
+    }
+    private void TryColdStore(AssetRecord record,int relative)
+    {
+        if(!UseAram||stopping||Cold.Has(record.Id))return;
+        int bytes=(record.Length+31)&~31;
+        if(coldWrite!=null||bytes>ColdWriteCapacity||bytes>scratch.Length||Frame<coldRetryAt)
+        {ColdWriteSkips++;return;}
+        try
+        {
+            if(coldStaging==null)coldStaging=NativeBuffer.Allocate(ColdWriteCapacity);
+            staging.Read(scratch,relative,0,bytes);
+            coldStaging.Write(scratch,0,0,bytes);
+            coldWrite=Cold.Store(record.Id,coldStaging,0,record.Length,batchIds,count);
+            if(coldWrite!=null)ColdWriteBytes+=bytes;else ColdWriteSkips++;
+        }
+        catch
+        {
+            // This is an optional storage accelerator. Admission/copy failures
+            // must never suppress a verified visible publication.
+            ColdWriteFailures++;coldRetryAt=Frame+120;
+        }
+    }
+    private void RetireCold()
+    {
+        if(!RetireIdleResources)
+        {for(int i=0;i<ResourceCapacity;i++)idleSince[i]=-1;return;}
+        if(IdleResourceFrames<0||MaximumIdleReleases<0)throw new ArgumentOutOfRangeException();
+        int released=0;
+        for(int i=0;i<ResourceCapacity;i++)
+        {
+            if(Policy.State(i)!=ResourceState.Resident||Policy.IsDemanded(i))
+            {idleSince[i]=-1;continue;}
+            var record=catalog.Get(Policy.Id(i));
+            if(record.Kind!=1&&record.Kind!=2)continue;
+            if(idleSince[i]<0)idleSince[i]=Frame;
+            if(released<MaximumIdleReleases&&Frame-idleSince[i]>=IdleResourceFrames&&Policy.CanEvict(i,CompletedFrame))
+            {Release(i,ResourcePriority.Optional);released++;ColdReleases++;}
+        }
+        ColdTextureTrims+=Textures.TrimCold(Frame,CompletedFrame,IdleTextureFrames,
+            WarmTextureHighBytes,WarmTextureLowBytes,MaximumIdleReleases);
     }
     public void Pump()
     {
@@ -257,6 +345,7 @@ public sealed class WorldStreamer : IDisposable
     private void PumpWork(long pumpAt)
     {
         int publishedBefore=Publications;
+        PollColdStore();RetireCold();
         Policy.CancelUnneeded();
         if(count==0){if(!stopping)Queue();return;}
         if(actualRead<0)
@@ -271,7 +360,7 @@ public sealed class WorldStreamer : IDisposable
             }
             reading=null;
             if(InjectFaults&&sequence%7==3)
-            {var r=catalog.Get(batchIds[count-1]);actualRead=r.Offset-batchOffset+r.Length-1;ShortReads++;}
+            {var r=catalog.Get(batchIds[count-1]);actualRead=Math.Min(actualRead,r.Offset-batchOffset+r.Length-1);ShortReads++;}
             if(InjectFaults&&sequence%7==5)
             {var r=catalog.Get(batchIds[count-1]);staging.Read(one,r.Offset-batchOffset,0,1);one[0]^=128;staging.Write(one,0,r.Offset-batchOffset,1);Corruptions++;}
         }
@@ -289,7 +378,8 @@ public sealed class WorldStreamer : IDisposable
                 long at=Clock.Timestamp;checksum=staging.ComputeCrc32(r.Offset-batchOffset+verifyAt,bytes,checksum);
                 ChecksumUs+=(int)(Clock.Timestamp-at);verifyAt+=bytes;work-=bytes;
                 if(verifyAt<r.Length)break;
-                valid=checksum==r.Checksum;if(!valid)ChecksumFailures++;
+                valid=checksum==r.Checksum;
+                if(!valid){ChecksumFailures++;if(fromCold[i])Cold.Remove(r.Id);}
             }
             if(!valid)Failures++;
             if(Policy.Complete(slot,tags[i],valid,Frame)&&!stopping){StartRecord(i);created++;}
@@ -316,13 +406,11 @@ public sealed class WorldStreamer : IDisposable
                     // or exposed to a material; the physical pair can be reused.
                     if(!Textures.Get(textureSlots[slot]).TryPublish())throw new InvalidOperationException("Obsolete texture staging did not finish.");
                     CancelledUploads++;
-                    Textures.Unbind(textureSlots[slot]);textureSlots[slot]=-1;owned[slot]=0;
+                    Textures.Unbind(textureSlots[slot],Frame);textureSlots[slot]=-1;owned[slot]=0;
                     if(Policy.State(slot)==ResourceState.Retiring)Policy.ReleaseRetired(slot);
                 }
                 observed[i]=true;
             }
-            if(stores[i]!=null)
-            {if(!stores[i]!.IsCompleted)done=false;else{stores[i]!.GetAwaiter().GetResult();stores[i]=null;}}
         }
         if(Publications-publishedBefore>1)MultiplePublications++;
         if(done)count=0;
@@ -330,13 +418,15 @@ public sealed class WorldStreamer : IDisposable
     public bool Stop()
     {
         stopping=true;Policy.BeginDemand();Policy.CancelUnneeded();
-        if(count!=0){Pump();return false;}return true;
+        if(count!=0||coldWrite!=null||Cold.PendingStores!=0){Pump();return false;}return true;
     }
     public void Dispose()
     {
         if(disposed)return;
         if(count!=0)throw new InvalidOperationException("Drain streaming work before disposal.");
+        PollColdStore();
+        if(coldWrite!=null||Cold.PendingStores!=0)throw new InvalidOperationException("Drain optional cold writes before disposal.");
         for(int i=0;i<meshes.Length;i++){meshes[i]?.Dispose();collisionBuffers[i]?.Dispose();}
-        Textures.Dispose();Cold.Dispose();staging.Dispose();otherBytes=0;disposed=true;
+        Textures.Dispose();Cold.Dispose();coldStaging?.Dispose();staging.Dispose();otherBytes=0;disposed=true;
     }
 }

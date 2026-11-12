@@ -36,6 +36,7 @@ public sealed class ResourceScheduler
     public int Generation(int slot) => generations[slot];
     public ResourceState State(int slot) => states[slot];
     public ResourcePriority Priority(int slot) => (ResourcePriority)priorities[slot];
+    public bool IsDemanded(int slot) => references[slot] > 0;
     public int Find(int id)
     {
         if(id<=0||id>=lookup.Length)return -1;
@@ -168,16 +169,16 @@ public sealed class ResourceScheduler
     public int EvictionCandidate(int completedFrame, ResourcePriority incoming = ResourcePriority.Optional)
     {
         int best = -1;
-        for (int i = 0; i < ids.Length; i++) if (states[i] == ResourceState.Resident &&
-            (references[i] == 0 || priorities[i] > (int)incoming) &&
-            fences[i] <= completedFrame &&
+        for (int i = 0; i < ids.Length; i++) if (CanEvict(i,completedFrame,incoming) &&
             (best < 0 || priorities[i] > priorities[best] || priorities[i] == priorities[best] && touched[i] < touched[best])) best = i;
         return best;
     }
+    public bool CanEvict(int slot,int completedFrame,ResourcePriority incoming=ResourcePriority.Optional)
+        => states[slot]==ResourceState.Resident &&
+           (references[slot]==0 || priorities[slot]>(int)incoming) && fences[slot]<=completedFrame;
     public void Evict(int slot, int completedFrame, ResourcePriority incoming = ResourcePriority.Optional)
     {
-        if (states[slot] != ResourceState.Resident || references[slot] != 0 && priorities[slot] <= (int)incoming ||
-            fences[slot] > completedFrame)
+        if (!CanEvict(slot,completedFrame,incoming))
             throw new InvalidOperationException("Resource is demanded or in flight.");
         ResidentBytes -= pins[slot]; pins[slot] = 0; Missing(slot);
         generations[slot] = nextGeneration++; Evicted++;

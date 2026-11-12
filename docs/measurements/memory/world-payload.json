@@ -3,6 +3,7 @@
     "Selected array element payload only; object field changes, headers and allocator rounding excluded.",
     "Managed heap reservation is unchanged; these are occupancy reductions.",
     "Cold ARAM, permanent geometry, active/idle texture pairs, framebuffers and SDK heaps are separate.",
+    "The optional cold-write ring is extra MEM1; only physically retired residents create further savings.",
     "Unsupported large records retain their existing demand-time rejection."
   ],
   "hardwareMeasurement": false,
@@ -13,10 +14,22 @@
       "saved": 5200
     },
     "enabledAfterFirstStore": {
-      "after": 5200,
+      "after": 7800,
       "before": 5200,
-      "saved": 0
+      "saved": -2600
     },
+    "targetPointerBytes": 4
+  },
+  "idleLifecycleArrayPayload": {
+    "cachedReadFlagsBytes": 8,
+    "change": {
+      "after": 904,
+      "before": 32,
+      "saved": -872
+    },
+    "idleResourceFramesBytes": 512,
+    "poolIdleAndFenceBytes": 384,
+    "removedStoreTaskReferencesBytes": 32,
     "targetPointerBytes": 4
   },
   "largestSupportedStreamRecord": 73984,
@@ -25,6 +38,15 @@
     "after": 73984,
     "before": 131072,
     "saved": 57088
+  },
+  "optionalColdWriteStaging": {
+    "allocatedLazily": true,
+    "bufferBytes": 16384,
+    "sourceAndColdBuffers": {
+      "after": 90368,
+      "before": 131072,
+      "saved": 40704
+    }
   },
   "records": 649,
   "retainedManagedPayload": {
@@ -40,8 +62,12 @@
       "saved": 1300
     }
   },
-  "schema": 1,
+  "schema": 2,
   "scope": "validated-v1-world-payload-accounting",
+  "selectedManagedArraySavings": {
+    "coldCacheActive": 690,
+    "coldCacheUnused": 8490
+  },
   "sourceSha256": "0a782f8137b426528a185cb8bbb5a67ae50d8fc5448ef6a88d56016daec49024",
   "transientCatalogTailPayload": {
     "after": 192,
