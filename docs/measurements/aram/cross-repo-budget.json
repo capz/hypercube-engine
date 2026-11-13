@@ -1,0 +1,129 @@
+{
+  "schema": 1,
+  "scope": "Source and asset arithmetic; no new runtime policy or hardware benchmark",
+  "hardwareMeasurement": false,
+  "sourceRevisions": {
+    "sdk": "bac008e509c44cd454eeeec0befad50adf096324",
+    "hypercube": "a5d2eea566c0521aa5a91a8b177ebdd11df49518",
+    "animaltown": "31d531feebd3a3dc6567627c60ad8abaa34dac3d"
+  },
+  "aramBudget": {
+    "physicalBytes": 16777216,
+    "systemBaseBytes": 16384,
+    "audioReservationBytes": 2097152,
+    "sdkUsableBytes": 14663680,
+    "terrainReservationBytes": 8388608,
+    "remainingBeforeOtherOwnersBytes": 6275072,
+    "maximumAllocations": 256,
+    "alignmentBytes": 32,
+    "compaction": false
+  },
+  "terrain": {
+    "proposedSuspendMem1BufferPayloadBytes": 1048576,
+    "additionalAramSnapshotBytes": 0,
+    "historicalUnusedReservationBytes": 4548192,
+    "historicalEvidenceRevision": "fbba8e2e52e43c63b52704c1b7880226017f52ee"
+  },
+  "engineFixture": {
+    "sourceSha256": "0a782f8137b426528a185cb8bbb5a67ae50d8fc5448ef6a88d56016daec49024",
+    "resolution": 48,
+    "records": 649,
+    "candidates": [
+      {
+        "name": "group-2-cmpr-fine-textures",
+        "records": 18,
+        "packedBytes": 22080,
+        "aramAlignedBytes": 22080,
+        "nativePayloadBytes": 44160
+      },
+      {
+        "name": "clustered-fine-meshes",
+        "records": 136,
+        "packedBytes": 296598,
+        "aramAlignedBytes": 298624,
+        "nativePayloadBytes": 324354
+      },
+      {
+        "name": "collision",
+        "records": 24,
+        "packedBytes": 1056,
+        "aramAlignedBytes": 1536,
+        "nativePayloadBytes": 1056
+      },
+      {
+        "name": "permanent-coarse-patches",
+        "records": 89,
+        "packedBytes": 304260,
+        "aramAlignedBytes": 305632,
+        "nativePayloadBytes": 334620
+      }
+    ],
+    "coldBudgetBytes": 262144,
+    "selectedCandidateRecords": 178,
+    "selectedAramAlignedBytes": 322240,
+    "coldBudgetShortfallBytes": 60096,
+    "schedulerSlots": 128,
+    "extraFullStagingBufferBytes": 73984
+  },
+  "sdkOneMiBFirstModelUpload": {
+    "packageBytes": 1048576,
+    "managedChunkBytes": 4096,
+    "logicalRequests": 256,
+    "dmaOperations": 512,
+    "dmaBytes": 2097152,
+    "approximateCpuMemcpyBytes": 3145728,
+    "minimumTransferObjects": 768,
+    "directNativeChunkBytes": 65536,
+    "directNativePotentialDmaOperations": 16,
+    "directNativePotentialDmaBytes": 1048576,
+    "requiresSafeNativePackageLease": true
+  },
+  "caveats": [
+    "Opportunity sizes are not realized savings; no runtime pager was enabled.",
+    "Check unique last owners, allocator overhead, pending/retired allocations, peak restore memory and largest free block.",
+    "Historical AnimalTown converter266 assets must be regenerated with pinned315 tooling before current runtime budgeting.",
+    "Selected candidates are not a proven concurrent working set.",
+    "An ARAM copy frees no MEM1 until original allocations are actually released."
+  ],
+  "illustrativeDolphinComparison": {
+    "scope": "Prior combined memory-reduction validation capture; not a matched replay or new benchmark",
+    "hardwareMeasurement": false,
+    "matchedReplay": false,
+    "sourceFile": "out/dolphin-memory-sdk-release-extended/results.json",
+    "sourceSha256": "50e2662f40ac1a9f864d8d0fdbac327855233cafe6e54ae5be319931641db398",
+    "configuration": {
+      "group": 2,
+      "format": 14,
+      "readBatchBytes": 65536,
+      "maxBatchRecords": 8,
+      "injectFaults": false
+    },
+    "cases": [
+      {
+        "scenario": 4,
+        "caseFrames": 663,
+        "frame99ms": 17,
+        "reads": 129,
+        "storageKiB": 456,
+        "aramKiB": 0,
+        "aramHits": 0,
+        "publications": 225,
+        "cancelled": 331,
+        "useAram": false
+      },
+      {
+        "scenario": 6,
+        "caseFrames": 690,
+        "frame99ms": 18,
+        "reads": 87,
+        "storageKiB": 327,
+        "aramKiB": 142,
+        "aramHits": 69,
+        "publications": 232,
+        "cancelled": 348,
+        "useAram": true
+      }
+    ],
+    "interpretation": "Less storage traffic; different publications/frame counts and rounded frame p99. Does not establish no performance regression."
+  }
+}
