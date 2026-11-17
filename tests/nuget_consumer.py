@@ -57,6 +57,17 @@ class Program {static void Main(){var q=new OpaqueDrawQueue(2);q.TryAdd(1,2,0xff
         compiler=work/'packages/dolphindotnet.sdk'/sdk/'tools/compiler/DolphinDotNet.Compiler.dll'
         run('dotnet',str(compiler),'--bundle',str(app/'bin/Release/net8.0/GameCube.dll'),str(work/'native-consumer'))
         if not (work/'native-consumer/source/generated_program.c').is_file():raise AssertionError('No consumer AOT bundle')
+        launch=work/'Launch';launch.mkdir()
+        (launch/'Launch.csproj').write_text((app/'GameCube.csproj').read_text())
+        (launch/'Program.cs').write_text('''using Dolphin.IO;
+internal static class Program {static int Main(){return LaunchContext.ArgumentCount==0?0:LaunchContext.ExecutablePath.Length;}}
+''')
+        run('dotnet','build',str(launch),'-c','Release','-p:DndBuildNative=false','-warnaserror:NU1608')
+        run('dotnet',str(compiler),'--bundle',str(launch/'bin/Release/net8.0/Launch.dll'),str(work/'native-launch'))
+        if '-DDND_CAPTURE_LAUNCH_ARGUMENTS' not in (work/'native-launch/Makefile').read_text():
+            raise AssertionError('Published SDK did not enable incoming launch-context capture')
+        if 'dnd_launch_count(' not in (work/'native-launch/source/generated_program.c').read_text():
+            raise AssertionError('Published launch-context call missing from AOT consumer')
         # Exercise the distributed default backend, rather than only compiling
         # the stubbed contract test or the source-checkout adapter.
         ordered=work/'Ordered';ordered.mkdir()

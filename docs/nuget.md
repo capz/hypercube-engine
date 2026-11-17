@@ -10,11 +10,17 @@ streaming adapters and depends on Core plus a specific published
 DolphinDotNet.GameCube version. The DolphinDotNet MSBuild SDK/compiler is a
 separate application requirement; it is not copied into an engine library nupkg.
 `Directory.Build.props` pins the package dependency version to
-`DolphinDotNet.GameCube` **0.1.0-preview.318.1**. The matching compiler/runtime
-source is **4c8cd26a1b5f8003598463116960367ffa17418f**, also pinned in
+`DolphinDotNet.GameCube` **0.1.0-preview.374.1**. The matching compiler/runtime
+source is **134a524d7cea119a634e9f516b100f9619dce1cb**, also pinned in
 `.sdk-revision` for source validation. Ordered passes retain their native SDK
 backend by default; the portable comparison remains available through
 `HypercubeNativePasses=false`.
+
+The current SDK adds `Dolphin.IO.LaunchContext` for bounded incoming GameCube
+launcher arguments, used by AnimalTown's standalone Dolphin Depot app profile.
+The external consumer also bundles this API and checks that the SDK includes
+its launch capture before managed startup. Existing rendering and full-resolution
+AA capabilities remain in the same exact SDK dependency closure.
 
 This upgrade accompanies [AnimalTown #47](https://github.com/capz/AnimalTown/pull/47).
 SDK 318 exposes independent TEV alpha stages, two-reference GX comparisons and
