@@ -5,6 +5,9 @@ Experimental GameCube engine built on [DolphinDotNet](https://github.com/capz/Do
 [Indexed mesh caching](docs/indexed-mesh-cache.md) retains exact native geometry
 prefixes for stable assets and shares terrain vertices without capacity padding.
 
+[Full-resolution hardware AA](docs/full-resolution-aa.md) replays prepared scenes
+through `FrameRenderer` without a frame-sized recording buffer.
+
 Open **Hypercube.sln** for the engine, runtime adapter, host checks and console validation sample. The existing DolphinDotNet texture stress/comparison samples remain in the SDK repository.
 
 ## Build

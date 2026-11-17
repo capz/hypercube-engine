@@ -2,5 +2,5 @@
  <PropertyGroup><OutputType>Exe</OutputType>
   <DefineConstants Condition="'$(HypercubeNativePasses)' == 'true'">$(DefineConstants);HYPERCUBE_NATIVE_PASSES</DefineConstants>
  </PropertyGroup>
- <ItemGroup><Compile Include="../../src/Hypercube.GameCube/OrderedMeshPasses.cs" Link="OrderedMeshPasses.cs" /></ItemGroup>
+ <ItemGroup><Compile Include="../../src/Hypercube.GameCube/OrderedMeshPasses.cs" Link="OrderedMeshPasses.cs" /><Compile Include="../../src/Hypercube.GameCube/FrameRenderer.cs" Link="FrameRenderer.cs" /></ItemGroup>
 </Project>
