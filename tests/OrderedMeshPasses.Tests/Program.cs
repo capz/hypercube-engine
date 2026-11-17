@@ -4,7 +4,23 @@ static class Program
 {
  static void Check(bool b){if(!b)throw new Exception("Pass contract failed");}
  static void Reject(Action a){try{a();}catch(ArgumentException){return;}catch(InvalidOperationException){return;}throw new Exception("Expected rejection");}
- static void Main(){
+ private sealed class PreparedScene:IFrameScene {
+  internal int Calls;internal int Snapshot=17;
+  public void SubmitFramePart(){if(!GraphicsDevice.Default.IsFrameActive||Snapshot!=17)throw new Exception("Unprepared scene");Calls++;}
+ }
+ static void Frames(){
+  var d=GraphicsDevice.Default;var scene=new PreparedScene();
+  foreach(int parts in new[]{1,2}){
+   d.Parts=parts;d.Begins=d.Presents=scene.Calls=0;
+   FrameRenderer.Draw(d,Color32.White,scene);
+   Check(d.Begins==1&&d.Presents==1&&scene.Calls==parts&&!d.IsFrameActive);
+   long before=GC.GetAllocatedBytesForCurrentThread();
+   for(int n=0;n<1000;n++)FrameRenderer.Draw(d,Color32.White,scene);
+   Check(GC.GetAllocatedBytesForCurrentThread()==before);
+  }
+  Console.WriteLine("Prepared frame replay: single presentation, one/two scene submissions and zero allocations passed.");
+ }
+ static void Main(){Frames();
   var mesh=new Mesh();Reject(()=>new OrderedMeshPasses(mesh,0));Reject(()=>new OrderedMeshPasses(mesh,257));
   var p=new OrderedMeshPasses(mesh,3);var m=new Material{Texture=new Texture2D(),Color=new Color32(9),TextureTransform=new UvTransform(9)};var r=new Renderer();var t=new Transform();
   for(int i=0;i<3;i++)p.Set(i,new Color32(i),new UvTransform(i));
@@ -32,7 +48,13 @@ namespace Dolphin.Graphics
  public enum LightingMode{Unlit,Diffuse}public enum TextureCoordinateMode{Uv0,ViewNormal}
  public readonly struct Color32{public readonly int Value;public Color32(int v){Value=v;}public static Color32 White=>new(255);}
  public readonly struct UvTransform{public readonly int Value;public UvTransform(int v){Value=v;}}
- public sealed class GraphicsDevice{public static readonly GraphicsDevice Default=new();public bool IsFrameActive;}
+ public sealed class GraphicsDevice{
+  public static readonly GraphicsDevice Default=new();public bool IsFrameActive;
+  public int Parts=1,Begins,Presents,Part;
+  public void BeginFrame(Color32 clear){if(IsFrameActive)throw new InvalidOperationException();IsFrameActive=true;Part=0;Begins++;}
+  public bool NextFramePart(){if(!IsFrameActive)throw new InvalidOperationException();return ++Part<Parts;}
+  public void EndFrame(){if(!IsFrameActive||Part!=Parts)throw new InvalidOperationException();IsFrameActive=false;Presents++;}
+ }
  public readonly struct SamplerState{}
  public sealed class Material{
   public Texture2D? Texture,SecondaryTexture;public object? Effect;public LightingMode Lighting;public TextureCoordinateMode TextureCoordinates;public Color32 Color;
