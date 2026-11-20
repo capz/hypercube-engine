@@ -10,31 +10,30 @@ streaming adapters and depends on Core plus a specific published
 DolphinDotNet.GameCube version. The DolphinDotNet MSBuild SDK/compiler is a
 separate application requirement; it is not copied into an engine library nupkg.
 `Directory.Build.props` pins the package dependency version to
-`DolphinDotNet.GameCube` **0.1.0-preview.374.1**. The matching compiler/runtime
-source is **134a524d7cea119a634e9f516b100f9619dce1cb**, also pinned in
+`DolphinDotNet.GameCube` **0.1.0-preview.376.1**. The matching compiler/runtime
+source is **9dcc4b6d111b109860be294820d0b14b21b8eced**, also pinned in
 `.sdk-revision` for source validation. Ordered passes retain their native SDK
 backend by default; the portable comparison remains available through
 `HypercubeNativePasses=false`.
 
-The current SDK adds `Dolphin.IO.LaunchContext` for bounded incoming GameCube
-launcher arguments, used by AnimalTown's standalone Dolphin Depot app profile.
-The external consumer also bundles this API and checks that the SDK includes
-its launch capture before managed startup. Existing rendering and full-resolution
-AA capabilities remain in the same exact SDK dependency closure.
+The current SDK adds `Dolphin.IO.LaunchContent` to resolve and mount content from
+the incoming GameCube launch device and directory, with explicit fallback
+locations and an application identity validator. AnimalTown can use this SDK
+API for its standalone Dolphin Depot app profile. The relocated package consumer
+builds and AOT-bundles a content resolver with a validator and generation-bound
+file access, and checks that the SDK captures launcher arguments before managed
+startup. See the [SDK launch-content contract](https://github.com/capz/DolphinDotNet/blob/9dcc4b6d111b109860be294820d0b14b21b8eced/docs/launch-context.md)
+for source selection, ownership and emulator limitations.
 
-This upgrade accompanies [AnimalTown #47](https://github.com/capz/AnimalTown/pull/47).
-SDK 318 exposes independent TEV alpha stages, two-reference GX comparisons and
-`TevMaterialPresets.DualTextureGlints` for its two scrolling water samples.
-Hypercube's scrolling helpers use these materials through the existing SDK API;
-no separate effect format, shader wrapper or texture allocation is introduced.
-The relocated package consumer builds/AOT-bundles this combination with a single
-engine reference and no runtime override or NU1608 suppression.
+Existing native ordered passes, rendering, full-resolution AA and scrolling
+water material capabilities remain in the same exact SDK dependency closure.
+The relocated consumer builds these APIs with a single engine reference and no
+runtime override or NU1608 suppression.
 
-Once this engine preview has been verified and published, AnimalTown can pin
-that published version in place of engine 28 and remove its temporary explicit
-runtime-318 compatibility override. Engine previews are published only by the
-existing release workflow after its publication trigger; this PR does not
-reserve a future package number or publish an unverified package.
+AnimalTown must pin a verified, published engine preview containing this SDK
+dependency before consuming the combination. Engine previews are published only
+by the existing release workflow after its publication trigger; this update
+does not reserve a future package number or publish an unverified package.
 
 ## Build and test without publishing
 
@@ -50,7 +49,7 @@ The consumer relocates the nupkgs, uses an isolated NuGet cache outside the
 repository, executes Core, then builds the Rendering sample and water-material consumer through PackageReference
 and the published DolphinDotNet SDK. It verifies transitive dependencies, confirms the SDK packages match the reviewed
 source revision in `.sdk-revision`, and checks AOT bundling and, with --native,
-actual Rendering and water DOL/ELF output. No SDK source checkout is
+actual Rendering, launch-content and water DOL/ELF output. No SDK source checkout is
 needed to consume the packages.
 
 ## Publish

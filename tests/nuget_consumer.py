@@ -59,15 +59,32 @@ class Program {static void Main(){var q=new OpaqueDrawQueue(2);q.TryAdd(1,2,0xff
         if not (work/'native-consumer/source/generated_program.c').is_file():raise AssertionError('No consumer AOT bundle')
         launch=work/'Launch';launch.mkdir()
         (launch/'Launch.csproj').write_text((app/'GameCube.csproj').read_text())
-        (launch/'Program.cs').write_text('''using Dolphin.IO;
-internal static class Program {static int Main(){return LaunchContext.ArgumentCount==0?0:LaunchContext.ExecutablePath.Length;}}
+        (launch/'Program.cs').write_text('''using Dolphin.IO;using Dolphin.Storage;
+internal static class Program {
+    private static bool Validate(LaunchContent content) {
+        using var stream=content.OpenRead("content.id");
+        return stream.Length>0;
+    }
+    static int Main() {
+        var result=LaunchContent.Mount(new LaunchContentOptions {
+            Fallbacks=new[]{new LaunchContentLocation(MountConfiguration.Disc())},
+            Validate=Validate
+        });
+        if(!result.Succeeded)return -(int)result.Failure;
+        using var content=result.Content!;
+        return content.IsValid?content.RootPath.Length:1;
+    }
+}
 ''')
         run('dotnet','build',str(launch),'-c','Release','-p:DndBuildNative=false','-warnaserror:NU1608')
         run('dotnet',str(compiler),'--bundle',str(launch/'bin/Release/net8.0/Launch.dll'),str(work/'native-launch'))
         if '-DDND_CAPTURE_LAUNCH_ARGUMENTS' not in (work/'native-launch/Makefile').read_text():
             raise AssertionError('Published SDK did not enable incoming launch-context capture')
-        if 'dnd_launch_count(' not in (work/'native-launch/source/generated_program.c').read_text():
+        launch_source=(work/'native-launch/source/generated_program.c').read_text()
+        if 'dnd_launch_count(' not in launch_source:
             raise AssertionError('Published launch-context call missing from AOT consumer')
+        if 'dnd_storage_open_mounted(' not in launch_source:
+            raise AssertionError('Published launch-content consumer omitted generation-bound file access')
         # Exercise the distributed default backend, rather than only compiling
         # the stubbed contract test or the source-checkout adapter.
         ordered=work/'Ordered';ordered.mkdir()
@@ -91,7 +108,7 @@ var renderer=new Renderer();var device=GraphicsDevice.Default;device.BeginFrame(
         run('dotnet',str(compiler),'--bundle',str(water/'bin/Release/net8.0/Water.dll'),str(work/'native-water'))
         if not (work/'native-water/source/generated_program.c').is_file():raise AssertionError('No water alpha AOT bundle')
         if args.native:
-            for project in (app,water):
+            for project in (app,launch,water):
                 run('dotnet','build',str(project),'-c','Release','-p:DndBuildBackend=Docker')
                 if not list(project.rglob('*.dol')) or not list(project.rglob('*.elf')):raise AssertionError('No external native executable: '+project.name)
     print('External NuGet restore, dependency closure and consumer checks passed')
