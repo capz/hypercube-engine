@@ -10,8 +10,8 @@ streaming adapters and depends on Core plus a specific published
 DolphinDotNet.GameCube version. The DolphinDotNet MSBuild SDK/compiler is a
 separate application requirement; it is not copied into an engine library nupkg.
 `Directory.Build.props` pins the package dependency version to
-`DolphinDotNet.GameCube` **0.1.0-preview.376.1**. The matching compiler/runtime
-source is **9dcc4b6d111b109860be294820d0b14b21b8eced**, also pinned in
+`DolphinDotNet.GameCube` **0.1.0-preview.379.1**. The matching compiler/runtime
+source is **7dc2fd3161e4dcc23c4c956b99972677f81ece48**, also pinned in
 `.sdk-revision` for source validation. Ordered passes retain their native SDK
 backend by default; the portable comparison remains available through
 `HypercubeNativePasses=false`.
@@ -29,6 +29,12 @@ Existing native ordered passes, rendering, full-resolution AA and scrolling
 water material capabilities remain in the same exact SDK dependency closure.
 The relocated consumer builds these APIs with a single engine reference and no
 runtime override or NU1608 suppression.
+
+The SDK also separates asynchronous DNMD loading from source-format dispatch.
+Applications that load only cooked DNMD models can discard the FBX, glTF and OBJ
+importer code and tables from their AOT executables. Source-format importers
+remain available to applications that call them; loading APIs, cancellation and
+native memory budgets are preserved.
 
 AnimalTown must pin a verified, published engine preview containing this SDK
 dependency before consuming the combination. Engine previews are published only
